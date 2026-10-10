@@ -134,14 +134,14 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v6</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v7</div>
   </div>
 </section>
 
 <section id="app">
   <header>
     <div class="who"><b id="name"></b><span id="badges"></span></div>
-    <div class="side"><div class="mark">AURA</div><button class="out" id="logout">تسجيل الخروج</button></div>
+    <div class="side"><div class="mark">AURA</div><button class="out" id="teamBtn" style="display:none"></button><button class="out" id="logout">تسجيل الخروج</button></div>
   </header>
   <main id="page"></main>
   <nav id="nav">
@@ -211,6 +211,8 @@ function showApp(){
   const add = t => { const s=document.createElement('span'); s.className='badge'; s.textContent=t; b.appendChild(s); };
   add(ROLE[profile.role] || profile.role);
   if(profile.is_tl) add('تيم ليدر');
+  const tb=$('teamBtn'); const lead=['senior','owner'].includes(profile.role);
+  tb.style.display=lead?'inline-block':'none'; tb.textContent=profile.role==='owner'?'الفريق':'فريقي'; tb.onclick=teamSheet;
   go('today');
 }
 
@@ -325,6 +327,7 @@ async function loadCands(){
     .select('*, applications(id,status,voice_status,archived,offer_id,interview_at,offers(title,candidate_message,interview_info,companies(name)))')
     .order('created_at',{ascending:false});
   if(error){ toast('تعذر تحميل المرشحين'); return []; }
+  if(profile.role!=='recruiter'){ const pn=await sb.from('profiles').select('id,full_name'); (pn.data||[]).forEach(p=>NAMES[p.id]=p.full_name); }
   return data||[];
 }
 
@@ -369,6 +372,7 @@ function candCard(c){
   return h('div',{class:'card'},
     h('div',{class:'rowb'},h('b',{style:'font-size:16px'},c.full_name),h('button',{class:'lnk',onclick:()=>candForm(c)},'تعديل')),
     h('div',{class:'m'},i1), h('div',{class:'m'},i2),
+    (NAMES[c.owner_id]&&c.owner_id!==uid)?h('div',{class:'m'},'الريكروتر: '+NAMES[c.owner_id]):null,
     apps.map(a=>appRow(a,c)),
     h('div',{class:'r2'},
       h('a',{class:'btn b2 sm',href:'tel:'+c.phone},'اتصال'),
@@ -960,6 +964,57 @@ async function runReport(from,to){
   const el=reportEl(data,label);
   openSheet('تقرير الفريق',h('div',null,el,h('button',{class:'btn amber',style:'width:100%;margin-top:12px',onclick:()=>{
     const pa=$('printArea'); pa.innerHTML=''; pa.appendChild(reportEl(data,label)); window.print(); }},'تصدير PDF (طباعة ثم حفظ PDF)')));
+}
+
+
+// ================= فريقي: نظرة التيم ليدر على فريقه =================
+const NAMES={};
+const BUCKETS=[['offered,accepted_offer','عُرض','g'],['voice_sent','فويس نوت','bl'],['voice_accepted','جاهز للإنترفيو','gr'],
+  ['interview_set','إنترفيو','or'],['interviewed','بانتظار التعيين','or'],['hired,commission_received','اتعيّن','gr'],
+  ['declined_offer,voice_rejected,no_show,rejected_after_interview,retention_failed','مرفوض / ملغي','rd']];
+async function teamSheet(){
+  const title=profile.role==='owner'?'الفريق':'فريقي';
+  openSheet(title,h('div',{class:'m'},'جاري التحميل...'));
+  const [pr,cd]=await Promise.all([
+    sb.from('profiles').select('id,full_name,phone,role,is_tl,manager_id,active').eq('active',true).order('full_name'),
+    sb.from('candidates').select('id,owner_id,full_name,archived,applications(id,status,archived,offers(title,companies(name)))')]);
+  if(pr.error||cd.error){ openSheet(title,h('div',{class:'err'},'تعذر تحميل بيانات الفريق')); return; }
+  const members=(pr.data||[]).filter(p=>p.id!==uid&&p.role!=='owner');
+  const nm={}; (pr.data||[]).forEach(p=>nm[p.id]=p.full_name);
+  const byOwner={}; (cd.data||[]).forEach(c=>{ (byOwner[c.owner_id]=byOwner[c.owner_id]||[]).push(c); });
+  const box=h('div',{style:'display:flex;flex-direction:column;gap:10px'});
+  if(!members.length){ box.appendChild(h('div',{class:'empty'},'مفيش ريكروترز في فريقك لسه.')); }
+  else {
+    const all=members.flatMap(m=>(byOwner[m.id]||[]).flatMap(c=>c.applications||[]));
+    const nCand=members.reduce((x,m)=>x+(byOwner[m.id]||[]).filter(c=>!c.archived).length,0);
+    box.appendChild(h('div',{class:'hero'},h('div',null,'إجمالي الفريق'),
+      h('div',{class:'mini'},h('div',null,'ريكروترز',h('b',null,members.length)),h('div',null,'مرشحين شغالين',h('b',null,nCand)),
+        h('div',null,'اتعيّن',h('b',null,all.filter(a=>['hired','commission_received'].includes(a.status)).length)))));
+  }
+  members.forEach(m=>{
+    const cs=byOwner[m.id]||[], apps=cs.flatMap(c=>c.applications||[]);
+    const tags=BUCKETS.map(([ks,l,cls])=>{ const n=apps.filter(a=>ks.split(',').includes(a.status)).length; return n?h('span',{class:'t '+cls},l+' '+n):null; });
+    const list=h('div',{class:'list',style:'display:none;margin-top:0'});
+    if(!cs.length) list.appendChild(h('div',{class:'m'},'مفيش مرشحين لسه.'));
+    cs.forEach(c=>{ const aps=c.applications||[];
+      list.appendChild(h('div',{class:'app'},h('b',{style:'font-size:14px'},c.full_name+(c.archived?' (مؤرشف)':'')),
+        aps.length?aps.map(a=>{ const o=a.offers||{}, st=ST[a.status]||[a.status,'g'];
+          return h('div',{class:'rowb'},h('span',{class:'m'},((o.companies&&o.companies.name)||'')+(o.title?' - '+o.title:'')+(a.archived?' (أرشيف)':'')),h('span',{class:'t '+st[1]},st[0])); })
+          :h('div',{class:'m'},'لسه ما اتعرضش عليه أوفر')));
+    });
+    const ph=normPhone(m.phone||'');
+    const wa=ph.length>=8
+      ? h('a',{class:'btn amber sm',href:'https://wa.me/'+waNum(ph)+'?text='+encodeURIComponent('أهلاً '+m.full_name+'،'),target:'_blank',rel:'noopener'},'تواصل واتساب')
+      : h('button',{class:'btn b2 sm',onclick:()=>toast('مفيش رقم موبايل مسجّل للريكروتر ده')},'مفيش رقم');
+    const tg=h('button',{class:'btn b2 sm'},'المرشحين ('+cs.length+')'); let open=false;
+    tg.onclick=()=>{ open=!open; list.style.display=open?'flex':'none'; tg.textContent=(open?'إخفاء المرشحين (':'المرشحين (')+cs.length+')'; };
+    box.appendChild(h('div',{class:'card'},
+      h('div',{class:'rowb'},h('b',{style:'font-size:16px'},m.full_name),h('span',{class:'t g'},(ROLE[m.role]||m.role)+(m.is_tl?' - تيم ليدر':''))),
+      (profile.role==='owner'&&m.manager_id&&nm[m.manager_id])?h('div',{class:'m'},'تابع لـ '+nm[m.manager_id]):null,
+      h('div',{class:'r2',style:'flex-wrap:wrap'},tags.some(Boolean)?tags:h('span',{class:'m'},'لسه مفيش تقديمات')),
+      h('div',{class:'r2'},wa,tg), list));
+  });
+  openSheet(title,box);
 }
 
 // ---- خروج + انتهاء الجلسة بعد 30 دقيقة خمول ----
