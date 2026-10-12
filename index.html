@@ -129,12 +129,12 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
     <div class="t">RECRUITMENT &amp; TALENT SOLUTIONS</div>
   </div>
   <div class="form">
-    <div><h1>تسجيل الدخول</h1><div class="sub">الحسابات بينشئها المدير فقط</div></div>
+    <div><h1>تسجيل الدخول</h1></div>
     <div id="err" class="err" style="display:none"></div>
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v7</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v8</div>
   </div>
 </section>
 
@@ -229,14 +229,14 @@ document.querySelectorAll('#nav button').forEach(x => x.onclick = () => go(x.dat
 
 // ---- قايمة + ----
 $('fab').onclick = () => {
-  const items = [['مرشح جديد', false]];
+  const items = [['مرشح جديد', false],['بحث عن أوفر لمرشح', false]];
   if(profile.role==='owner') items.push(['عرض جديد',true],['شركة جديدة',true],['وكالة جديدة',true]);
   const box = $('items'); box.innerHTML='';
   items.forEach(([label, ownerOnly]) => {
     const b = document.createElement('button'); b.className='it';
     const s = document.createElement('span'); s.textContent = label; b.appendChild(s);
     if(ownerOnly){ const t=document.createElement('span'); t.className='tag'; t.textContent='المدير'; b.appendChild(t); }
-    b.onclick = () => { $('menu').style.display='none'; if(label==='مرشح جديد') candForm(null); else if(label==='عرض جديد') offerForm(null); else if(label==='شركة جديدة') companyForm(null); else if(label==='وكالة جديدة') agencyForm(null); };
+    b.onclick = () => { $('menu').style.display='none'; if(label==='مرشح جديد') candForm(null); else if(label==='بحث عن أوفر لمرشح') offerSearch(); else if(label==='عرض جديد') offerForm(null); else if(label==='شركة جديدة') companyForm(null); else if(label==='وكالة جديدة') agencyForm(null); };
     box.appendChild(b);
   });
   $('menu').style.display='block';
@@ -418,11 +418,11 @@ async function changeStatus(a,c,to){
 }
 
 // ---- مطابقة وعرض أوفر ----
-function matches(c,o){
+function matches(c,o,skipLang){
   if(o.min_age!=null && c.age!=null && c.age<o.min_age) return false;
   if(o.max_age!=null && c.age!=null && c.age>o.max_age) return false;
   if(o.grad_allowed && o.grad_allowed.length && c.grad_status && !o.grad_allowed.includes(c.grad_status)) return false;
-  if(o.lang1_min_rank!=null){
+  if(o.lang1_min_rank!=null && !skipLang){
     const eq=(a,b)=>a&&b&&a.trim().toLowerCase()===b.trim().toLowerCase();
     const ok=(eq(c.lang1,o.lang1)&&(c.lang1_rank||0)>=o.lang1_min_rank)||(eq(c.lang2,o.lang1)&&(c.lang2_rank||0)>=o.lang1_min_rank);
     if(!ok) return false;
@@ -545,7 +545,8 @@ const OST={active:['نشط','gr'],hold:['متوقف (Hold)','or'],closed:['مغ�
 const toInt=v=>v===''||v==null?null:parseInt(v,10);
 const toNum=v=>v===''||v==null?null:Number(v);
 const isOwner=()=>profile.role==='owner';
-let OSEG='offers', OFILTER='all';
+let OSEG='offers', OFILTER='all', OQ='', OC={};
+const matchQ=a=>{ const q=OQ.trim().toLowerCase(); return !q || a.filter(Boolean).join(' ').toLowerCase().includes(q); };
 const one=x=>Array.isArray(x)?x[0]:x;
 
 function chipsRow(opts,cur,pick){
@@ -554,19 +555,25 @@ function chipsRow(opts,cur,pick){
 async function renderOffers(){
   const page=$('page'); page.innerHTML=''; page.appendChild(h('h2',null,'العروض'));
   const segs=[['offers','العروض'],['info','معلومات الشركات']]; if(isOwner()) segs.push(['agencies','الوكالات']);
-  page.appendChild(h('div',{class:'seg'},segs.map(([k,l])=>h('button',{class:OSEG===k?'on':'',onclick:()=>{OSEG=k;OFILTER='all';renderOffers();}},l))));
-  const body=h('div',{class:'list',style:'margin-top:0'}); page.appendChild(body);
+  page.appendChild(h('div',{class:'seg'},segs.map(([k,l])=>h('button',{class:OSEG===k?'on':'',onclick:()=>{OSEG=k;OFILTER='all';OQ='';renderOffers();}},l))));
+  const body=h('div',{class:'list',style:'margin-top:0'});
+  const paintSeg=()=> OSEG==='offers'?paintOffers(body):(OSEG==='info'?paintInfo(body):paintAgencies(body));
+  const ph=OSEG==='offers'?'بحث في العروض (الوظيفة، الشركة، المكان)':(OSEG==='info'?'بحث في الشركات':'بحث في الوكالات');
+  page.appendChild(h('input',{class:'in',style:'margin-bottom:8px',placeholder:ph,value:OQ,oninput:e=>{OQ=e.target.value;paintSeg();}}));
+  if(OSEG==='offers') page.appendChild(h('button',{class:'btn amber',style:'width:100%;margin-bottom:10px',onclick:offerSearch},'بحث عن أوفر بمواصفات المرشح'));
+  page.appendChild(body);
   body.appendChild(h('div',{class:'m'},'جاري التحميل...'));
-  if(OSEG==='offers') await paintOffers(body); else if(OSEG==='info') await paintInfo(body); else await paintAgencies(body);
+  await paintSeg();
 }
 
 // ---- العروض ----
 async function paintOffers(body){
-  const { data, error } = await sb.from('offers').select('*, companies(name,status,hide_name_in_copy)').order('created_at',{ascending:false});
+  let data,error;
+  if(OC.offers){ data=OC.offers; } else { const r=await sb.from('offers').select('*, companies(name,status,hide_name_in_copy)').order('created_at',{ascending:false}); data=r.data; error=r.error; if(!error) OC.offers=data; }
   body.innerHTML='';
   if(error){ body.appendChild(h('div',{class:'err'},'تعذر تحميل العروض')); return; }
   body.appendChild(chipsRow([['all','الكل'],['active','نشط'],['hold','متوقف'],['closed','مغلق']],OFILTER,k=>{OFILTER=k;renderOffers();}));
-  const rows=(data||[]).filter(o=>OFILTER==='all'||o.status===OFILTER);
+  const rows=(data||[]).filter(o=>(OFILTER==='all'||o.status===OFILTER)&&matchQ([o.title,o.location,o.work_mode,o.salary_text,o.companies&&o.companies.name]));
   if(!rows.length){ body.appendChild(h('div',{class:'empty'},'مفيش عروض هنا.')); return; }
   rows.forEach(o=>{ const st=OST[o.status]||[o.status,'g'];
     body.appendChild(h('div',{class:'card'},
@@ -589,7 +596,7 @@ function offerDetails(o){
     kv('الجنسية',o.nationality), kv('الجنس',o.gender), kv('المرتب',o.salary_text), kv('الشيفت',o.shift_text),
     kv('المميزات',o.benefits), kv('المتطلبات',o.requirements_text),
     h('div',{class:'card',style:'background:#EFF6FF;box-shadow:none;margin-top:10px'},
-      h('b',{style:'font-size:14px'},'معلومات الإنترفيو والتقديم (بدون عمولة)'),
+      h('b',{style:'font-size:14px'},'معلومات الإنترفيو والتقديم'),
       h('div',{style:'white-space:pre-wrap;font-size:13px;line-height:1.8'},o.interview_info||'—'),
       h('div',{class:'m'},'ما تبعتهاش للمرشح قبل قبول الفويس نوت.'),
       h('button',{class:'btn amber sm',onclick:()=>copy(o.interview_info||'')},'نسخ معلومات الإنترفيو والتقديم')),
@@ -605,11 +612,12 @@ function offerDetails(o){
 
 // ---- معلومات الشركات ----
 async function paintInfo(body){
-  const { data, error } = await sb.from('companies').select('*, company_private(agency_commission,tl_amount,payout_cycle,agency_id,agencies(name))').order('name');
+  let data,error;
+  if(OC.info){ data=OC.info; } else { const r=await sb.from('companies').select('*, company_private(agency_commission,tl_amount,payout_cycle,agency_id,agencies(name))').order('name'); data=r.data; error=r.error; if(!error) OC.info=data; }
   body.innerHTML='';
   if(error){ body.appendChild(h('div',{class:'err'},'تعذر تحميل الشركات')); return; }
   body.appendChild(chipsRow([['all','الكل'],['active','نشط'],['hold','متوقف'],['cancelled','ملغي']],OFILTER,k=>{OFILTER=k;renderOffers();}));
-  const rows=(data||[]).filter(c=>OFILTER==='all'||c.status===OFILTER);
+  const rows=(data||[]).filter(c=>(OFILTER==='all'||c.status===OFILTER)&&matchQ([c.name,isOwner()?((one((one(c.company_private)||{}).agencies)||{}).name):'']));
   if(!rows.length){ body.appendChild(h('div',{class:'empty'},'مفيش شركات هنا.')); return; }
   const t0=today();
   rows.forEach(c=>{ const st=CST[c.status]||[c.status,'g'], p=one(c.company_private), ag=p&&one(p.agencies);
@@ -627,12 +635,14 @@ async function paintInfo(body){
 
 // ---- الوكالات (المدير) ----
 async function paintAgencies(body){
-  const [{data:ags,error},{data:cp}]=await Promise.all([sb.from('agencies').select('*').order('name'),sb.from('company_private').select('agency_id')]);
+  let ags,cp,error;
+  if(OC.ags){ ags=OC.ags; cp=OC.cp; } else { const [a,c]=await Promise.all([sb.from('agencies').select('*').order('name'),sb.from('company_private').select('agency_id')]); ags=a.data; cp=c.data; error=a.error; if(!error){ OC.ags=ags; OC.cp=cp; } }
   body.innerHTML='';
   if(error){ body.appendChild(h('div',{class:'err'},'تعذر تحميل الوكالات')); return; }
   body.appendChild(h('button',{class:'btn',onclick:()=>agencyForm(null)},'+ وكالة جديدة'));
-  if(!(ags||[]).length) body.appendChild(h('div',{class:'empty'},'مفيش وكالات.'));
-  (ags||[]).forEach(a=>{ const st=CST[a.status]||[a.status,'g']; const n=(cp||[]).filter(x=>x.agency_id===a.id).length;
+  const agsF=(ags||[]).filter(a=>matchQ([a.name,a.notes,a.bonus_note]));
+  if(!agsF.length) body.appendChild(h('div',{class:'empty'},'مفيش وكالات.'));
+  agsF.forEach(a=>{ const st=CST[a.status]||[a.status,'g']; const n=(cp||[]).filter(x=>x.agency_id===a.id).length;
     body.appendChild(h('div',{class:'card'},
       h('div',{class:'rowb'},h('b',null,a.name),h('span',{class:'t '+st[1]},st[0])),
       h('div',{class:'m'},'عدد الشركات: '+n+(a.payout_cycle?' - الدفع '+a.payout_cycle:'')),
@@ -640,7 +650,7 @@ async function paintAgencies(body){
       h('div',{class:'r2'},h('button',{class:'btn b2 sm',onclick:()=>agencyForm(a)},'تعديل'),h('button',{class:'btn b2 sm',onclick:()=>visSheet('agency',a.id,a.name)},'الظهور'))));
   });
 }
-function afterSave(seg){ closeSheet(); toast('تم الحفظ ✓'); OSEG=seg; OFILTER='all'; go('offers'); }
+function afterSave(seg){ OC={}; OQ=''; closeSheet(); toast('تم الحفظ ✓'); OSEG=seg; OFILTER='all'; go('offers'); }
 function errBox(){ return h('div',{class:'err',style:'display:none'}); }
 function showErr2(el,t){ el.textContent=t; el.style.display='block'; }
 const STS=[['active','نشط'],['hold','متوقف (Hold)'],['cancelled','ملغي']];
@@ -737,7 +747,7 @@ async function offerForm(o){
       f.req.value&&'المطلوب: '+f.req.value, f.ben.value&&'المميزات: '+f.ben.value, f.shift.value&&'الشيفت: '+f.shift.value,
       'للتقديم ابعت فويس نوت بتعرّف فيه نفسك'].filter(Boolean);
     f.msg.value=L.join('\n');
-    if(!f.scr.value.trim()) f.scr.value='Name:\nAge:\nLanguage level:\nGraduation status:\nExperience:\nLocation:\nآخر 4 أرقام من التليفون:\n+ فويس نوت دقيقة على الأقل';
+    if(!f.scr.value.trim()) f.scr.value='Hello 👋\nThis is HR .....\n\nI currently have several job opportunities available. To help me find the most suitable one for you, kindly send me:\n\n1️⃣ Name:\n2️⃣ Age:\n3️⃣ Location:\n4️⃣ Graduation status:\n5️⃣ English Level \n6️⃣ Previous experience:\n7️⃣ The position you\'re interested in:\n\nI’ll check the available offers and get back to you with the most suitable opportunity. 👍\n\nIf you’re interested in a Call Center or Sales position, please send a 1-minute English VN introducing yourself. 🎙️';
     toast('تم توليد النص');
   };
   const save=h('button',{class:'btn',style:'flex:1.6',onclick:async()=>{
@@ -764,8 +774,8 @@ async function offerForm(o){
     h('div',{class:'r2'},fld('الجنسية',f.nat),fld('المرتب',f.sal)),
     fld('الشيفت',f.shift), fld('المميزات',f.ben), fld('المتطلبات',f.req),
     h('button',{class:'btn amber',onclick:gen},'ولّد نص العرض تلقائيًا'),
-    fld('نص العرض للمرشح (بدون عمولة أو إنترفيو)',f.msg), fld('أسئلة Screening',f.scr),
-    fld('معلومات الإنترفيو والتقديم (بدون عمولة)',f.iv), fld('رابط الفورم',f.url),
+    fld('نص العرض للمرشح',f.msg), fld('أسئلة Screening',f.scr),
+    fld('معلومات الإنترفيو والتقديم',f.iv), fld('رابط الفورم',f.url),
     h('div',{class:'r2'},h('button',{class:'btn b2',style:'flex:1',onclick:closeSheet},'إلغاء'),save));
   if(o.id) box.appendChild(h('button',{class:'btn dng',onclick:async()=>{
     if(!await confirmBox('حذف العرض؟','سيتم حذف '+o.title+'. لو عليه تقديمات مش هيتم الحذف، والأفضل تقفله.',null,'حذف')) return;
@@ -773,6 +783,45 @@ async function offerForm(o){
     if(error){ toast('مش ينفع الحذف: عليه تقديمات. استخدم متوقف أو مغلق'); return; } afterSave('offers');
   }},'حذف العرض'));
   openSheet(o.id?'تعديل عرض':'عرض جديد',box);
+}
+
+
+// ---- بحث عن أوفر بمواصفات المرشح (من غير تسجيل مرشح) ----
+function offerSearch(){
+  const f={ city:h('input',{class:'in',placeholder:'مثال: Maadi'}), mode:sel(['','Site','WFH','Hybrid','Back office','Field'],''),
+    l1:h('input',{class:'in',placeholder:'مثال: English'}), r1:sel(LV,''), l2:h('input',{class:'in',placeholder:'اختياري'}), r2:sel(LV,''),
+    age:h('input',{class:'in',type:'number',inputmode:'numeric'}), grad:sel([['','—'],['grad','خريج'],['undergrad','طالب'],['dropout','Dropout'],['gap','Gap year']],''),
+    exp:h('input',{class:'in',type:'number',inputmode:'numeric',placeholder:'بالشهور'}), gender:sel(['','ذكر','أنثى'],''), nat:sel(['','مصري','أجنبي','عربي'],'') };
+  const out=h('div',{style:'display:flex;flex-direction:column;gap:8px'});
+  const run=async()=>{
+    out.innerHTML=''; out.appendChild(h('div',{class:'m'},'جاري البحث...'));
+    const { data, error } = await sb.from('offers').select('*, companies(name,status,recruiter_amount,senior_amount,retention_days)').eq('status','active');
+    out.innerHTML='';
+    if(error){ out.appendChild(h('div',{class:'err'},'تعذر تحميل العروض')); return; }
+    const c={ age:toInt(f.age.value), grad_status:f.grad.value||null, lang1:f.l1.value.trim()||null, lang1_rank:toInt(f.r1.value), lang2:f.l2.value.trim()||null, lang2_rank:toInt(f.r2.value),
+      experience_months:toInt(f.exp.value)||0, gender:f.gender.value||null };
+    const skipLang=!c.lang1&&!c.lang2, city=f.city.value.trim().toLowerCase(), mode=f.mode.value, nat=f.nat.value;
+    const my=o=> profile.role==='senior'?o.companies.senior_amount:o.companies.recruiter_amount;
+    const list=(data||[]).filter(o=>o.companies&&o.companies.status==='active'&&matches(c,o,skipLang)
+      &&(!city||(o.location||'').toLowerCase().includes(city))&&(!mode||o.work_mode===mode)
+      &&(!nat||nat==='مصري'||(nat==='أجنبي'&&o.nationality==='مصري وأجانب')||(nat==='عربي'&&['مصري وأجانب','مصري وعرب'].includes(o.nationality)))).sort((x,y)=>my(y)-my(x));
+    out.appendChild(h('b',{style:'font-size:14px'},list.length+' عرض مناسب'));
+    if(!list.length) out.appendChild(h('div',{class:'empty'},'مفيش عروض بالمواصفات دي. جرّب تشيل شرط.'));
+    list.forEach(o=>out.appendChild(h('div',{class:'card',style:'background:#F8FAFC;box-shadow:none'},
+      h('div',{class:'rowb'},h('b',null,o.companies.name+' - '+o.title)),
+      h('div',{class:'m'},[o.location,o.work_mode,o.salary_text].filter(Boolean).join(' - ')),
+      h('div',{class:'r2',style:'flex-wrap:wrap'},h('span',{class:'t gr'},'عمولتك '+my(o)),h('span',{class:'t g'},'Retention '+o.companies.retention_days+' يوم')),
+      h('div',{class:'r2'},h('button',{class:'btn b2 sm',onclick:()=>copy(o.candidate_message||'')},'نسخ العرض'),h('button',{class:'btn sm',onclick:()=>offerDetails(o)},'فتح العرض')))));
+  };
+  openSheet('بحث عن أوفر',h('div',{style:'display:flex;flex-direction:column;gap:10px'},
+    h('div',{class:'m'},'اختار شرط أو أكتر، والباقي سيبه فاضي.'),
+    h('div',{class:'r2'},fld('المدينة / المكان',f.city),fld('نظام الشغل',f.mode)),
+    h('div',{class:'r2'},fld('اللغة الأولى',f.l1),fld('المستوى',f.r1)),
+    h('div',{class:'r2'},fld('اللغة الثانية',f.l2),fld('المستوى',f.r2)),
+    h('div',{class:'r2'},fld('السن',f.age),fld('التخرج',f.grad)),
+    h('div',{class:'r2'},fld('الخبرة (شهور)',f.exp),fld('الجنس',f.gender)),
+    fld('الجنسية',f.nat),
+    h('button',{class:'btn',onclick:run},'ابحث'), out));
 }
 
 // ---- التحكم في الظهور (المدير) ----
@@ -848,10 +897,10 @@ async function renderToday(){
   const mine=rows.filter(c=>c.earner_id===uid), sm=sums(isOwner()?rows:mine);
   if(isOwner()){ const n=ownerNet(rows,mn.priv);
     body.appendChild(h('div',{class:'hero'},h('div',null,'صافي ربحك المتوقع'),h('div',{class:'big'},fmt(n.net)+' ج.م'),
-      h('div',{class:'mini'},h('div',null,'من الوكالة',h('b',null,fmt(n.agency))),h('div',null,'مستحقات الفريق',h('b',null,fmt(n.team))),h('div',null,'جاهز للصرف',h('b',null,fmt(n.netReady))))));
+      h('div',{class:'mini'},h('div',null,'إجمالي الوكالة',h('b',null,fmt(n.agency))),h('div',null,'مستحقات الفريق',h('b',null,fmt(n.team))),h('div',null,'جاهز للصرف',h('b',null,fmt(n.netReady))))));
   } else {
     body.appendChild(h('div',{class:'hero'},h('div',null,'عمولتك المتوقعة'),h('div',{class:'big'},fmt(sm.expected+sm.ready)+' ج.م'),
-      h('div',{class:'mini'},h('div',null,'جاهزة',h('b',null,fmt(sm.ready))),h('div',null,'مدفوعة',h('b',null,fmt(sm.paid))),h('div',null,'ضايعة',h('b',null,fmt(sm.lost))))));
+      h('div',{class:'mini'},h('div',null,'متوقعة',h('b',null,fmt(sm.expected))),h('div',null,'جاهزة',h('b',null,fmt(sm.ready))),h('div',null,'مدفوعة',h('b',null,fmt(sm.paid))))));
   }
   // تنبيهات
   const al=[];
