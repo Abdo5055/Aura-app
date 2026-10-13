@@ -134,7 +134,7 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v9</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v10</div>
   </div>
 </section>
 
@@ -297,6 +297,7 @@ const waNum=p=> p.startsWith('0') ? '2'+p : p;
 
 const GRAD={grad:'خريج',undergrad:'طالب',dropout:'Dropout',gap:'Gap year'};
 const LV=[['','—'],[2,'A2'],[3,'B1'],[4,'B2'],[6,'C1'],[7,'C2']];
+const nr=r=>(r===5?4:r);
 const rankLabel=r=>{ const x=LV.find(v=>String(v[0])===String(r)); return x&&x[0]!==''?x[1]:''; };
 
 const ST={
@@ -424,10 +425,10 @@ function matches(c,o,skipLang){
   if(o.grad_allowed && o.grad_allowed.length && c.grad_status && !o.grad_allowed.includes(c.grad_status)) return false;
   if(!skipLang){
     const eq=(a,b)=>a&&b&&a.trim().toLowerCase()===b.trim().toLowerCase();
-    const okL=(ol,r)=>{ if(!ol||r==null) return true; return (eq(c.lang1,ol)&&(c.lang1_rank||0)>=r)||(eq(c.lang2,ol)&&(c.lang2_rank||0)>=r); };
+    const okL=(ol,r)=>{ if(!ol||r==null) return true; r=nr(r); return (eq(c.lang1,ol)&&(nr(c.lang1_rank)||0)>=r)||(eq(c.lang2,ol)&&(nr(c.lang2_rank)||0)>=r); };
     if(!okL(o.lang1,o.lang1_min_rank)||!okL(o.lang2,o.lang2_min_rank)) return false;
   }
-  if((c.experience_months||0)<(o.min_experience_months||0)) return false;
+  if(c.experience_months!=null&&c.experience_months<(o.min_experience_months||0)) return false;
   if(o.gender && c.gender && o.gender!==c.gender) return false;
   return true;
 }
@@ -806,7 +807,7 @@ function langMatchSearch(o,chosen,lv){
   if(!chosen.length) return true;
   const ol=[...new Set([o.lang1,o.lang2].map(nl).filter(Boolean))];
   if(ol.length!==chosen.length||!ol.every(l=>chosen.includes(l))) return false;
-  const need={}; need[nl(o.lang1)]=o.lang1_min_rank; if(o.lang2) need[nl(o.lang2)]=o.lang2_min_rank;
+  const need={}; need[nl(o.lang1)]=nr(o.lang1_min_rank); if(o.lang2) need[nl(o.lang2)]=nr(o.lang2_min_rank);
   return ol.every(l=>{ const have=lv[l], r=need[l]; return have==null||r==null||have>=r; });
 }
 async function offerSearch(){
@@ -824,16 +825,24 @@ async function offerSearch(){
   const out=h('div',{style:'display:flex;flex-direction:column;gap:8px'});
   const run=()=>{
     out.innerHTML='';
-    const c={ age:toInt(f.age.value), grad_status:f.grad.value||null, experience_months:toInt(f.exp.value)||0, gender:f.gender.value||null };
+    const c={ age:toInt(f.age.value), grad_status:f.grad.value||null, experience_months:toInt(f.exp.value), gender:f.gender.value||null };
     const chosen=[...new Set([f.l1.value,f.l2.value].map(nl).filter(Boolean))], lv={};
     if(f.l1.value) lv[nl(f.l1.value)]=toInt(f.r1.value); if(f.l2.value) lv[nl(f.l2.value)]=toInt(f.r2.value);
     const city=f.city.value, mode=f.mode.value, nat=f.nat.value;
     const my=o=> profile.role==='senior'?o.companies.senior_amount:o.companies.recruiter_amount;
-    const list=act.filter(o=>matches(c,o,true)&&langMatchSearch(o,chosen,lv)
-      &&(!city||offerAreas(o).includes(city))&&(!mode||o.work_mode===mode)
-      &&(!nat||nat==='مصري'||(nat==='أجنبي'&&o.nationality==='مصري وأجانب')||(nat==='عربي'&&['مصري وأجانب','مصري وعرب'].includes(o.nationality)))).sort((x,y)=>my(y)-my(x));
+    const base=o=>matches(c,o,true)&&(!city||offerAreas(o).includes(city))&&(!mode||o.work_mode===mode)
+      &&(!nat||nat==='مصري'||(nat==='أجنبي'&&o.nationality==='مصري وأجانب')||(nat==='عربي'&&['مصري وأجانب','مصري وعرب'].includes(o.nationality)));
+    const list=act.filter(o=>base(o)&&langMatchSearch(o,chosen,lv)).sort((x,y)=>my(y)-my(x));
     out.appendChild(h('b',{style:'font-size:14px'},list.length+' عرض مناسب'));
-    if(!list.length) out.appendChild(h('div',{class:'empty'},'مفيش عروض بالمواصفات دي. جرّب تشيل شرط.'));
+    if(!list.length){
+      out.appendChild(h('div',{class:'empty'},'مفيش عروض بالمواصفات دي.'));
+      const alt=chosen.length?act.filter(base):[];
+      if(alt.length){
+        const combos=[...new Set(alt.map(o=>[o.lang1,o.lang2].filter(Boolean).join(' + ')))];
+        out.appendChild(h('div',{class:'al y'},'فيه '+alt.length+' عرض بنفس باقي الشروط لكن بلغات تانية: '+combos.join(' / ')));
+        out.appendChild(h('button',{class:'btn b2',onclick:()=>{ f.l1.value=''; f.l2.value=''; run(); }},'ابحث من غير شرط اللغة'));
+      }
+    }
     list.forEach(o=>out.appendChild(h('div',{class:'card',style:'background:#F8FAFC;box-shadow:none'},
       h('div',{class:'rowb'},h('b',null,o.companies.name+' - '+o.title)),
       h('div',{class:'m'},[o.location,o.work_mode,o.salary_text].filter(Boolean).join(' - ')),
