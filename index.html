@@ -118,6 +118,24 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
 .al.y{background:#FEF3C7;color:#92400E}.al.r{background:#FEE2E2;color:#991B1B}.al.g{background:#D1FAE5;color:#065F46}
 #printArea{display:none}
 @media print{body>*:not(#printArea){display:none!important}#printArea{display:block!important;padding:8px;direction:rtl}@page{size:A4 landscape;margin:10mm}}
+
+.gcard{background:#fff;border-radius:22px;padding:14px;box-shadow:0 1px 3px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:8px;border:2px solid transparent;transition:transform .15s,box-shadow .2s;cursor:pointer}
+.gcard:active{transform:scale(.98)}
+.gcard.ach{border-color:#F59E0B;background:linear-gradient(135deg,#FFFBEB,#fff);box-shadow:0 4px 14px rgba(245,158,11,.25)}
+.gnum{font-size:30px;font-weight:800;line-height:1}.gnum small{font-size:15px;color:var(--muted);font-weight:700}
+.gpct{font-weight:800;font-size:16px;color:var(--teal);display:flex;align-items:center;gap:6px}
+.gstar{font-size:22px;color:#CBD5E1;transition:color .3s,transform .3s}
+.gstar.on{color:#F59E0B;animation:gpop .7s ease both}
+.gbar{position:relative;height:18px;border-radius:99px;background:#E2E8F0;overflow:hidden}
+.gbar.mini{height:10px}
+.gfill{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#0F766E,#10B981 60%,#F59E0B);transition:width 1.1s cubic-bezier(.2,.8,.2,1);position:relative;overflow:hidden}
+.gfill::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(120%);animation:gshine 2.6s ease-in-out infinite}
+.gtick{position:absolute;top:0;bottom:0;width:2px;background:rgba(15,23,42,.18)}
+.gtick.on{background:rgba(255,255,255,.7)}
+.gmsg{font-size:13px;font-weight:600}
+@keyframes gshine{to{transform:translateX(-120%)}}
+@keyframes gpop{0%{transform:scale(.3) rotate(-30deg)}60%{transform:scale(1.35) rotate(8deg)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.gfill,.gstar,.gcard{transition:none!important;animation:none!important}.gfill::after{animation:none!important}}
 </style>
 </head>
 <body>
@@ -134,7 +152,7 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v11</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v13</div>
   </div>
 </section>
 
@@ -342,7 +360,7 @@ async function renderCands(){
   const arch=h('button',{class:'ch'+(FILTER.archived?' on':''),onclick:()=>{FILTER.archived=!FILTER.archived;renderCands();}},'الأرشيف');
   const count=h('div',{class:'m'});
   const list=h('div',{class:'list'});
-  page.append(q, h('div',{class:'r2',style:'margin-top:8px'},sel,arch), count, list);
+  page.append(q, h('div',{class:'r2',style:'margin-top:8px'},sel,arch), isOwner()?h('button',{class:'btn b2 sm',style:'margin-top:8px;width:100%;flex:none',onclick:exportCandsCSV},'تصدير المرشحين (CSV)'):null, count, list);
   list.appendChild(h('div',{class:'m'},'جاري التحميل...'));
   CANDS=await loadCands(); paint();
 
@@ -373,6 +391,7 @@ function candCard(c){
   return h('div',{class:'card'},
     h('div',{class:'rowb'},h('b',{style:'font-size:16px'},c.full_name),h('button',{class:'lnk',onclick:()=>candForm(c)},'تعديل')),
     h('div',{class:'m'},i1), h('div',{class:'m'},i2),
+    c.voice_url?h('a',{class:'lnk',href:c.voice_url,target:'_blank',rel:'noopener'},'سماع الفويس نوت'):h('a',{class:'lnk',href:'https://vocaroo.com/',target:'_blank',rel:'noopener',style:'color:#64748B'},'تسجيل فويس نوت (Vocaroo)'),
     (NAMES[c.owner_id]&&c.owner_id!==uid)?h('div',{class:'m'},'الريكروتر: '+NAMES[c.owner_id]):null,
     apps.map(a=>appRow(a,c)),
     h('div',{class:'r2'},
@@ -484,7 +503,8 @@ function candForm(c){
     nat:h('input',{class:'in',value:c.nationality||'مصري'}),
     mil:sel(['','أدّى الخدمة','معفى','مؤجل','لم يؤدّ','لا ينطبق'],c.military_status),
     src:sel(['','جروب فيسبوك','واتساب','تيك توك','لينكدإن','ترشيح','أخرى'],c.source),
-    notes:h('textarea',{class:'in',rows:2,value:c.notes||''})
+    notes:h('textarea',{class:'in',rows:2,value:c.notes||''}),
+    voice:h('input',{class:'in',type:'url',inputmode:'url',value:c.voice_url||'',placeholder:'https://vocaroo.com/...',style:'direction:ltr;text-align:right'})
   };
   const err=h('div',{class:'err',style:'display:none'});
   const num=v=>v===''||v==null?null:parseInt(v,10);
@@ -497,14 +517,14 @@ function candForm(c){
       grad_status:f.grad.value||null, lang1:f.lang1.value.trim()||null, lang1_rank:num(f.r1.value),
       lang2:f.lang2.value.trim()||null, lang2_rank:num(f.r2.value), experience_months:num(f.exp.value)||0,
       experience_type:f.etype.value||null, work_mode:f.mode.value||null, gender:f.gender.value||null,
-      nationality:f.nat.value.trim()||null, military_status:f.mil.value||null, source:f.src.value||null, notes:f.notes.value.trim()||null };
+      nationality:f.nat.value.trim()||null, military_status:f.mil.value||null, source:f.src.value||null, notes:f.notes.value.trim()||null, voice_url:f.voice.value.trim()||null };
     save.disabled=true;
     let res;
     if(c.id) res=await sb.from('candidates').update(p).eq('id',c.id).select().single();
     else res=await sb.from('candidates').insert({...p,owner_id:uid}).select().single();
     save.disabled=false;
     if(res.error){
-      err.textContent = res.error.code==='23505' ? 'الرقم ده متسجل قبل كده. صاحب المرشح هو أول ريكروتر سجّله.' : (res.error.message||'تعذر الحفظ');
+      err.textContent = /voice_url/.test(res.error.message||'') ? 'شغّل أمر SQL الخاص بعمود voice_url في Supabase الأول' : res.error.code==='23505' ? 'الرقم ده متسجل قبل كده. صاحب المرشح هو أول ريكروتر سجّله.' : (res.error.message||'تعذر الحفظ');
       err.style.display='block'; return;
     }
     closeSheet(); toast('تم الحفظ ✓');
@@ -521,7 +541,9 @@ function candForm(c){
     h('div',{class:'r2'},fld('الخبرة (شهور)',f.exp),fld('نوعها',f.etype)),
     h('div',{class:'r2'},fld('نظام الشغل',f.mode),fld('الجنس',f.gender)),
     h('div',{class:'r2'},fld('الجنسية',f.nat),fld('موقف التجنيد',f.mil)),
-    fld('المصدر',f.src), fld('ملاحظات',f.notes),
+    fld('المصدر',f.src),
+    h('div',{class:'f'},h('label',{class:'lb'},'رابط الفويس نوت (Vocaroo)'),f.voice,h('a',{class:'btn amber sm',style:'flex:none;width:100%',href:'https://vocaroo.com/',target:'_blank',rel:'noopener'},'فتح Vocaroo لتسجيل الفويس')),
+    fld('ملاحظات',f.notes),
     h('div',{class:'m'},'لو الرقم متسجل قبل كده هيتمنع الحفظ، والمرشح يفضل للأول اللي سجّله.'),
     h('div',{class:'r2'},h('button',{class:'btn b2',style:'flex:1',onclick:closeSheet},'إلغاء'),save));
   if(c.id){
@@ -564,6 +586,7 @@ async function renderOffers(){
   const ph=OSEG==='offers'?'بحث في العروض (الوظيفة، الشركة، المكان)':(OSEG==='info'?'بحث في الشركات':'بحث في الوكالات');
   page.appendChild(h('input',{class:'in',style:'margin-bottom:8px',placeholder:ph,value:OQ,oninput:e=>{OQ=e.target.value;paintSeg();}}));
   if(OSEG==='offers') page.appendChild(h('button',{class:'btn amber',style:'width:100%;margin-bottom:10px',onclick:offerSearch},'بحث عن أوفر بمواصفات المرشح'));
+  if(OSEG==='offers'&&isOwner()) page.appendChild(h('button',{class:'btn b2',style:'width:100%;margin-bottom:10px',onclick:exportOffersCSV},'تصدير العروض مع رابط التقديم (CSV)'));
   page.appendChild(body);
   body.appendChild(h('div',{class:'m'},'جاري التحميل...'));
   await paintSeg();
@@ -607,7 +630,6 @@ function offerDetails(o){
     h('div',{class:'r2',style:'margin-top:10px'},
       h('button',{class:'btn b2 sm',onclick:()=>copy(o.screening_questions||'')},'نسخ أسئلة Screening'),
       h('button',{class:'btn sm',onclick:()=>copy(o.candidate_message||'')},'نسخ العرض')),
-    o.form_url?h('a',{class:'btn b2',style:'margin-top:8px',href:o.form_url,target:'_blank',rel:'noopener'},'فتح رابط الفورم'):null,
     isOwner()?h('div',{class:'r2',style:'margin-top:10px'},
       h('button',{class:'btn b2 sm',onclick:()=>offerForm(o)},'تعديل'),
       h('button',{class:'btn b2 sm',onclick:()=>visSheet('offer',o.id,o.title)},'الظهور')):null);
@@ -742,7 +764,7 @@ async function offerForm(o){
     l1:text('lang1','English'), r1:sel(LV,o.lang1_min_rank), l2:text('lang2'), r2:sel(LV,o.lang2_min_rank),
     exp:numf('min_experience_months'), nat:text('nationality'), gen:sel(['','ذكر','أنثى'],o.gender),
     sal:text('salary_text'), shift:text('shift_text'), ben:area('benefits',2), req:area('requirements_text',2),
-    msg:area('candidate_message',5), scr:area('screening_questions',4), iv:area('interview_info',4), url:text('form_url')};
+    msg:area('candidate_message',5), scr:area('screening_questions',4), iv:area('interview_info',4)};
   const grads=Object.keys(GRAD).map(k=>{ const i=h('input',{type:'checkbox'}); i.checked=(o.grad_allowed||[]).includes(k); return [k,i]; });
   const err=errBox();
   const gen=()=>{
@@ -762,7 +784,7 @@ async function offerForm(o){
       lang2:f.l2.value.trim()||null,lang2_min_rank:toInt(f.r2.value),grad_allowed:g.length?g:null,min_experience_months:toInt(f.exp.value)||0,
       nationality:f.nat.value.trim()||null,gender:f.gen.value||null,salary_text:f.sal.value.trim()||null,shift_text:f.shift.value.trim()||null,
       benefits:f.ben.value.trim()||null,requirements_text:f.req.value.trim()||null,candidate_message:f.msg.value.trim()||null,
-      screening_questions:f.scr.value.trim()||null,interview_info:f.iv.value.trim()||null,form_url:f.url.value.trim()||null};
+      screening_questions:f.scr.value.trim()||null,interview_info:f.iv.value.trim()||null};
     const r=o.id?await sb.from('offers').update(p).eq('id',o.id):await sb.from('offers').insert(p);
     if(r.error){ showErr2(err,r.error.message); return; } afterSave('offers');
   }},'حفظ');
@@ -779,7 +801,7 @@ async function offerForm(o){
     fld('الشيفت',f.shift), fld('المميزات',f.ben), fld('المتطلبات',f.req),
     h('button',{class:'btn amber',onclick:gen},'ولّد نص العرض تلقائيًا'),
     fld('نص العرض للمرشح',f.msg), fld('أسئلة Screening',f.scr),
-    fld('معلومات الإنترفيو والتقديم',f.iv), fld('رابط الفورم',f.url),
+    fld('معلومات الإنترفيو والتقديم',f.iv),
     h('div',{class:'r2'},h('button',{class:'btn b2',style:'flex:1',onclick:closeSheet},'إلغاء'),save));
   if(o.id) box.appendChild(h('button',{class:'btn dng',onclick:async()=>{
     if(!await confirmBox('حذف العرض؟','سيتم حذف '+o.title+'. لو عليه تقديمات مش هيتم الحذف، والأفضل تقفله.',null,'حذف')) return;
@@ -927,9 +949,11 @@ async function renderToday(){
   const page=$('page'); page.innerHTML=''; page.appendChild(h('h2',null,'النهارده'));
   const body=h('div',{class:'list',style:'margin-top:0'}); page.appendChild(body);
   body.appendChild(h('div',{class:'m'},'جاري التحميل...'));
-  const [ap,co,mn]=await Promise.all([
-    sb.from('applications').select('id,status,interview_at,archived,candidates(full_name,phone),offers(title,companies(name))'),
-    sb.from('companies').select('name,bonus_amount,bonus_ends,status'), loadMoney()]);
+  const [ap,co,mn,pf,gl]=await Promise.all([
+    sb.from('applications').select('id,status,interview_at,archived,hired_at,owner_id,candidates(full_name,phone),offers(title,companies(name))'),
+    sb.from('companies').select('name,bonus_amount,bonus_ends,status'), loadMoney(),
+    sb.from('profiles').select('id,full_name,role,manager_id,is_tl,active'),
+    sb.from('goals').select('*').eq('month',today().slice(0,7)+'-01')]);
   body.innerHTML='';
   const apps=ap.data||[], rows=mn.rows;
   // بطاقة الفلوس
@@ -941,6 +965,7 @@ async function renderToday(){
     body.appendChild(h('div',{class:'hero'},h('div',null,'عمولتك المتوقعة'),h('div',{class:'big'},fmt(sm.expected+sm.ready)+' ج.م'),
       h('div',{class:'mini'},h('div',null,'متوقعة',h('b',null,fmt(sm.expected))),h('div',null,'جاهزة',h('b',null,fmt(sm.ready))),h('div',null,'مدفوعة',h('b',null,fmt(sm.paid))))));
   }
+  if(!gl.error) renderGoals(body,apps,pf.data||[],gl.data||[]);
   // تنبيهات
   const al=[];
   (co.data||[]).forEach(c=>{ if(c.bonus_amount && c.bonus_ends){ const d=daysTo(c.bonus_ends); if(d>=0&&d<=7) al.push([d<=2?'r':'y','بونص '+c.name+' (+'+c.bonus_amount+') بينتهي '+(d===0?'النهارده':'بعد '+d+' يوم')]); } });
@@ -1103,6 +1128,160 @@ async function teamSheet(){
       h('div',{class:'r2'},wa,tg), list));
   });
   openSheet(title,box);
+}
+
+
+// ================= الأهداف الشهرية =================
+const MONTHS_AR=['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+let GOAL_CELEBRATED=false;
+const monthLabel=mk=>{ const [y,m]=mk.split('-').map(Number); return MONTHS_AR[m-1]+' '+y; };
+const hiresOf=(apps,mk,ids)=>apps.filter(a=>['hired','commission_received'].includes(a.status)&&a.hired_at&&a.hired_at.slice(0,7)===mk&&ids.has(a.owner_id)).length;
+function goalCalc(g,apps,profs,mk){
+  const mem=profs.filter(p=>p.manager_id===g.user_id&&p.active);
+  const ids=new Set(g.scope==='team'?mem.map(m=>m.id):[g.user_id]);
+  const done=hiresOf(apps,mk,ids), target=g.target_hires;
+  return {done,target,left:Math.max(0,target-done),pct:Math.min(100,Math.round(done*100/target)),ach:done>=target,mem};
+}
+const daysLeftInMonth=()=>{ const n=new Date(); return new Date(n.getFullYear(),n.getMonth()+1,0).getDate()-n.getDate()+1; };
+function goalMsg(c,g){
+  const dl=daysLeftInMonth(), bon=Number(g.bonus_amount||0);
+  if(c.ach) return bon?('ممتاز! الهدف اتحقق وبونص '+fmt(bon)+' ج.م مستحق.'):'ممتاز! الهدف اتحقق.';
+  if(c.done===0) return 'ابدأ بأول توظيف. قدامك '+dl+' يوم.';
+  if(c.pct>=75) return 'قربت! فاضل '+c.left+' توظيف بس.';
+  const pace=Math.max(1,Math.ceil(dl/c.left));
+  return 'فاضل '+c.left+' توظيف و'+dl+' يوم'+(c.left>dl?' - لازم توظيف كل يوم تقريبًا.':' - يعني توظيف كل '+pace+' يوم تقريبًا.');
+}
+function goalBar(c,mini){
+  const fill=h('div',{class:'gfill'});
+  const bar=h('div',{class:'gbar'+(mini?' mini':'')},fill,[25,50,75].map(p=>h('i',{class:'gtick'+(c.pct>=p?' on':''),style:'right:'+p+'%'})));
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ fill.style.width=c.pct+'%'; }));
+  return bar;
+}
+function goalBonusChip(g,c){
+  const bon=Number(g.bonus_amount||0); if(!bon) return null;
+  return h('span',{class:'t '+(g.bonus_paid?'dg':(c.ach?'or':'g'))},(g.bonus_paid?'بونص مدفوع ':'بونص ')+fmt(bon)+' ج.م');
+}
+function goalCard(g,c,label,onTap){
+  return h('div',{class:'gcard'+(c.ach?' ach':''),onclick:onTap},
+    h('div',{class:'rowb'},h('b',{style:'font-size:14px'},label),goalBonusChip(g,c)),
+    h('div',{class:'rowb',style:'align-items:flex-end'},h('div',{class:'gnum'},c.done,h('small',null,' / '+c.target)),h('div',{class:'gpct'},c.pct+'%',h('span',{class:'gstar'+(c.ach?' on':'')},'★'))),
+    goalBar(c), h('div',{class:'m gmsg'},goalMsg(c,g)));
+}
+function renderGoals(body,apps,profs,goals){
+  const mk=today().slice(0,7), nm=id=>(profs.find(p=>p.id===id)||{}).full_name||'';
+  body.appendChild(h('div',{class:'rowb'},h('b',{style:'font-size:15px'},'هدف '+monthLabel(mk)),isOwner()?h('button',{class:'lnk',onclick:()=>goalsManager()},'تحديد الأهداف'):null));
+  const list=isOwner()?goals.slice().sort((a,b)=>nm(a.user_id).localeCompare(nm(b.user_id),'ar')||(a.scope==='team'?1:-1)):goals.filter(g=>g.user_id===uid).sort((a,b)=>a.scope==='personal'?-1:1);
+  if(!list.length){ body.appendChild(h('div',{class:'empty'},isOwner()?'مفيش أهداف للشهر ده لسه. اضغط "تحديد الأهداف".':'لسه ما اتحددلكش هدف للشهر ده.')); return; }
+  let dueTotal=0;
+  list.forEach(g=>{ const c=goalCalc(g,apps,profs,mk);
+    if(isOwner()&&c.ach&&!g.bonus_paid) dueTotal+=Number(g.bonus_amount||0);
+    const label=isOwner()?(nm(g.user_id)+(g.scope==='team'?' - هدف الفريق':'')):(g.scope==='team'?'هدف فريقي':'هدفي الشخصي');
+    body.appendChild(goalCard(g,c,label,()=>goalDetails(g,c,profs,apps,mk,goals,label)));
+    if(!isOwner()&&c.ach&&!GOAL_CELEBRATED){ GOAL_CELEBRATED=true; setTimeout(()=>toast('مبروك! حققت '+label),600); }
+  });
+  if(isOwner()&&dueTotal>0) body.appendChild(h('div',{class:'al y'},'بونصات أهداف مستحقة للدفع: '+fmt(dueTotal)+' ج.م'));
+}
+function goalDetails(g,c,profs,apps,mk,goals,label){
+  const bon=Number(g.bonus_amount||0), dl=daysLeftInMonth();
+  const box=h('div',{style:'display:flex;flex-direction:column;gap:10px'},
+    h('div',{class:'gcard'+(c.ach?' ach':''),style:'cursor:default'},
+      h('div',{class:'rowb'},h('b',null,label+' - '+monthLabel(mk)),goalBonusChip(g,c)),
+      h('div',{class:'rowb',style:'align-items:flex-end'},h('div',{class:'gnum'},c.done,h('small',null,' / '+c.target)),h('div',{class:'gpct'},c.pct+'%',h('span',{class:'gstar'+(c.ach?' on':'')},'★'))),
+      goalBar(c)),
+    h('div',{class:'al '+(c.ach?'g':'y')},goalMsg(c,g)),
+    kv('المتبقي',c.left+' توظيف'), kv('الأيام المتبقية في الشهر',dl),
+    kv('البونص',bon?(fmt(bon)+' ج.م - '+(g.bonus_paid?'تم الدفع':(c.ach?'مستحق':'يتحقق عند اكتمال الهدف'))):'لا يوجد'));
+  if(g.scope==='team'&&c.mem.length){
+    box.appendChild(h('b',{style:'font-size:14px;margin-top:6px'},'مساهمة الفريق'));
+    c.mem.forEach(m=>{ const mg=goals.find(x=>x.user_id===m.id&&x.scope==='personal'), n=hiresOf(apps,mk,new Set([m.id]));
+      const mc=mg?goalCalc(mg,apps,profs,mk):null;
+      box.appendChild(h('div',{class:'app'},h('div',{class:'rowb'},h('b',{style:'font-size:14px'},m.full_name),h('span',{class:'t '+(mc&&mc.ach?'gr':'g')},n+(mg?' / '+mg.target_hires:' توظيف'))),mc?goalBar(mc,true):null));
+    });
+  }
+  if(isOwner()){
+    const r=h('div',{class:'r2'});
+    if(c.ach&&bon&&!g.bonus_paid) r.appendChild(h('button',{class:'btn amber sm',onclick:async()=>{
+      if(!await confirmBox('تأكيد دفع البونص؟','تأكيد دفع بونص '+fmt(bon)+' ج.م ('+label+').',null,'تأكيد الدفع')) return;
+      const {error}=await sb.from('goals').update({bonus_paid:true,bonus_paid_at:today()}).eq('id',g.id);
+      if(error){ toast(error.message); return; } closeSheet(); toast('تم تسجيل دفع البونص ✓'); renderToday();
+    }},'تم دفع البونص'));
+    r.appendChild(h('button',{class:'btn b2 sm',onclick:()=>goalsManager(mk)},'تعديل الأهداف'));
+    box.appendChild(r);
+  }
+  openSheet('تفاصيل الهدف',box);
+}
+async function goalsManager(mk){
+  if(!isOwner()) return;
+  mk=mk||today().slice(0,7); const month=mk+'-01';
+  openSheet('تحديد الأهداف',h('div',{class:'m'},'جاري التحميل...'));
+  const [pr,gs]=await Promise.all([sb.from('profiles').select('id,full_name,role,is_tl').eq('active',true).neq('role','owner').order('full_name'),sb.from('goals').select('*').eq('month',month)]);
+  if(pr.error||gs.error){ openSheet('تحديد الأهداف',h('div',{class:'err'},'تعذر التحميل. اتأكد إن جدول الأهداف (goals) اتعمل في Supabase.')); return; }
+  const mi=h('input',{type:'month',class:'in',value:mk,onchange:e=>{ if(e.target.value) goalsManager(e.target.value); }});
+  const rows=[]; const box=h('div',{style:'display:flex;flex-direction:column;gap:10px'},fld('الشهر',mi));
+  const mkRow=(p,scope,title)=>{
+    const ex=(gs.data||[]).find(g=>g.user_id===p.id&&g.scope===scope);
+    const t=h('input',{class:'in',type:'number',inputmode:'numeric',placeholder:'عدد التوظيفات',value:ex?ex.target_hires:''});
+    const b=h('input',{class:'in',type:'number',inputmode:'decimal',placeholder:'بونص (جنيه)',value:ex?ex.bonus_amount:''});
+    rows.push({user_id:p.id,scope,t,b,ex});
+    return h('div',{class:'card',style:'gap:6px'},h('div',{class:'rowb'},h('b',{style:'font-size:14px'},title),h('span',{class:'t g'},ROLE[p.role]||p.role)),h('div',{class:'r2'},fld('الهدف',t),fld('البونص',b)));
+  };
+  (pr.data||[]).forEach(p=>{ box.appendChild(mkRow(p,'personal',p.full_name+' - هدف شخصي')); if(p.role==='senior'&&p.is_tl) box.appendChild(mkRow(p,'team',p.full_name+' - هدف الفريق')); });
+  if(!(pr.data||[]).length) box.appendChild(h('div',{class:'empty'},'مفيش مستخدمين لسه.'));
+  const err=errBox();
+  const prev=new Date(mk+'-01T00:00:00'); prev.setMonth(prev.getMonth()-1);
+  const pmk=prev.getFullYear()+'-'+String(prev.getMonth()+1).padStart(2,'0');
+  box.appendChild(h('button',{class:'btn b2',onclick:async()=>{
+    const {data}=await sb.from('goals').select('*').eq('month',pmk+'-01');
+    (data||[]).forEach(g=>{ const r=rows.find(x=>x.user_id===g.user_id&&x.scope===g.scope); if(r){ r.t.value=g.target_hires; r.b.value=g.bonus_amount; } });
+    toast('تم نسخ أهداف الشهر اللي فات - اضغط حفظ');
+  }},'نسخ أهداف الشهر اللي فات'));
+  box.appendChild(err);
+  box.appendChild(h('div',{class:'r2'},h('button',{class:'btn b2',style:'flex:1',onclick:closeSheet},'إلغاء'),
+    h('button',{class:'btn',style:'flex:1.6',onclick:async()=>{
+      const up=[],del=[];
+      rows.forEach(r=>{ const t=toInt(r.t.value), b=toNum(r.b.value)||0;
+        if(t>0) up.push({user_id:r.user_id,scope:r.scope,month,target_hires:t,bonus_amount:b}); else if(r.ex) del.push(r.ex.id); });
+      if(up.length){ const x=await sb.from('goals').upsert(up,{onConflict:'user_id,scope,month'}); if(x.error){ showErr2(err,x.error.message); return; } }
+      if(del.length){ const x=await sb.from('goals').delete().in('id',del); if(x.error){ showErr2(err,x.error.message); return; } }
+      closeSheet(); toast('تم حفظ الأهداف ✓'); renderToday();
+    }},'حفظ')));
+  openSheet('تحديد أهداف '+monthLabel(mk),box);
+}
+
+
+// ================= تصدير CSV (المدير) =================
+function downloadCSV(name,headers,rows){
+  const esc=v=>{ v=v==null?'':String(v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const csv='\ufeff'+[headers].concat(rows).map(r=>r.map(esc).join(',')).join('\r\n');
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+async function exportOffersCSV(){
+  if(!isOwner()) return; toast('جاري التجهيز...');
+  const {data,error}=await sb.from('offers').select('*, companies(name,retention_days,wait_months,recruiter_amount,senior_amount,company_private(agency_commission,tl_amount,agencies(name)))').order('created_at');
+  if(error){ toast('تعذر التصدير'); return; }
+  const rows=(data||[]).map(o=>{ const c=o.companies||{}, p=one(c.company_private)||{}, a=one(p.agencies)||{};
+    return [a.name,c.name,o.title,o.status,o.location,o.work_mode,o.salary_text,o.shift_text,o.lang1,rankLabel(o.lang1_min_rank),o.lang2,rankLabel(o.lang2_min_rank),o.min_age,o.max_age,
+      p.agency_commission,c.recruiter_amount,c.senior_amount,p.tl_amount,c.retention_days,c.wait_months,o.form_url,o.interview_info]; });
+  downloadCSV('aura_offers_'+today()+'.csv',['الوكالة','الشركة','العرض','الحالة','المكان','نظام الشغل','المرتب','الشيفت','اللغة 1','المستوى','اللغة 2','المستوى','أقل سن','أكبر سن','عمولة الوكالة','عمولة الريكروتر','عمولة السينيور','عمولة TL','Retention (يوم)','فترة الانتظار (شهور)','رابط التقديم','معلومات الإنترفيو'],rows);
+  toast('تم تنزيل ملف العروض ✓');
+}
+async function exportCandsCSV(){
+  if(!isOwner()) return; toast('جاري التجهيز...');
+  const [cd,pr]=await Promise.all([
+    sb.from('candidates').select('*, applications(status,hired_at,retention_end,offers(title,form_url,companies(name,company_private(agencies(name)))))').order('created_at'),
+    sb.from('profiles').select('id,full_name')]);
+  if(cd.error){ toast('تعذر التصدير'); return; }
+  const nm={}; (pr.data||[]).forEach(p=>nm[p.id]=p.full_name);
+  const rows=[];
+  (cd.data||[]).forEach(c=>{ const base=[c.full_name,c.phone,c.voice_url,nm[c.owner_id],c.age,c.city,GRAD[c.grad_status]||'',c.lang1,rankLabel(c.lang1_rank),c.lang2,rankLabel(c.lang2_rank),c.experience_months,c.source];
+    const aps=c.applications||[];
+    if(!aps.length) rows.push(base.concat(['','','','','','','',c.notes]));
+    aps.forEach(a=>{ const o=a.offers||{}, co=o.companies||{}, ag=one((one(co.company_private)||{}).agencies)||{};
+      rows.push(base.concat([co.name,ag.name,o.title,o.form_url,(ST[a.status]||[a.status])[0],a.hired_at,a.retention_end,c.notes])); });
+  });
+  downloadCSV('aura_candidates_'+today()+'.csv',['الاسم','الموبايل','رابط الفويس نوت','الريكروتر','السن','المدينة','التخرج','اللغة 1','المستوى','اللغة 2','المستوى','الخبرة (شهور)','المصدر','الشركة','الوكالة','العرض','رابط التقديم','الحالة','تاريخ التعيين','نهاية الـ Retention','ملاحظات'],rows);
+  toast('تم تنزيل ملف المرشحين ✓');
 }
 
 // ---- خروج + انتهاء الجلسة بعد 30 دقيقة خمول ----
