@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#033C38">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://msezwzpoafrnlkdosdwe.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>AURA</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -152,7 +153,7 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v14</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v15</div>
   </div>
 </section>
 
@@ -220,7 +221,8 @@ async function start(){
   profile = data; uid = user.id; showApp(); resetIdle();
 }
 
-function showLogin(){ $('app').style.display='none'; $('login').style.display='flex'; $('p').value=''; profile=null; clearTimeout(idleTimer); }
+function showLogin(){ $('app').style.display='none'; $('login').style.display='flex'; $('p').value=''; profile=null; clearTimeout(idleTimer);
+  try{ closeSheet(); $('page').innerHTML=''; OC={}; CANDS=[]; FILTER={q:'',status:'',type:'',archived:false}; OSEG='offers'; OFILTER='all'; OTYPE='all'; OQ=''; MF='expected'; CQ=''; CSTAT='active'; GOAL_CELEBRATED=false; Object.keys(NAMES).forEach(k=>delete NAMES[k]); }catch(e){} }
 
 function showApp(){
   $('login').style.display='none'; $('app').style.display='flex';
@@ -303,7 +305,9 @@ async function copy(text){
   catch(e){ const t=h('textarea',{style:'position:fixed;opacity:0'}); t.value=text; document.body.appendChild(t); t.select(); try{document.execCommand('copy');}catch(_){} t.remove(); }
   toast('تم النسخ ✓');
 }
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const localInput=iso=>{ const d=new Date(iso), p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); };
+const safeUrl=u=>{ try{ const x=new URL(String(u||'').trim()); return (x.protocol==='https:'||x.protocol==='http:')?x.href:''; }catch(e){ return ''; } };
 function normPhone(p){
   let d=(p||'').replace(/\D/g,'');
   if(d.startsWith('0020')) d=d.slice(4);
@@ -320,24 +324,32 @@ const rankLabel=r=>{ const x=LV.find(v=>String(v[0])===String(r)); return x&&x[0
 
 const ST={
   offered:['تم عرض الأوفر','g'], accepted_offer:['وافق على الأوفر','bl'], declined_offer:['لم يوافق على الأوفر','rd'],
-  voice_sent:['تم إرسال الفويس نوت','bl'], voice_accepted:['تم قبول الفويس نوت - جاهز للإنترفيو','gr'], voice_rejected:['تم رفض الفويس نوت','rd'],
-  interview_set:['تم تحديد معاد الإنترفيو','or'], no_show:['لم يحضر الإنترفيو','rd'], interviewed:['تم الإنترفيو - بانتظار التعيين','or'],
+  voice_sent:['تم إرسال الفويس نوت - بانتظار موافقة المدير','bl'], voice_accepted:['تم قبول الفويس نوت - جاهز للإنترفيو','gr'], voice_rejected:['تم رفض الفويس نوت','rd'],
+  interview_pending:['بانتظار موافقة المدير على الإنترفيو','or'], interview_set:['تمت الموافقة - معاد الإنترفيو محدد','or'], no_show:['لم يحضر الإنترفيو','rd'], interviewed:['تم الإنترفيو - بانتظار التعيين','or'],
   rejected_after_interview:['مرفوض بعد الإنترفيو','rd'], hired:['تم التعيين - بانتظار العمولة','gr'], retention_failed:['فشل الاحتفاظ','rd'],
   commission_received:['تم استلام العمولة - مغلق','dg']
 };
+// خطوات الريكروتر (للأمام + سحب الطلب)
 const NEXT={
-  offered:['accepted_offer','voice_sent','declined_offer'], accepted_offer:['voice_sent','declined_offer'],
-  voice_sent:['voice_accepted','voice_rejected'], voice_accepted:['interview_set'], interview_set:['interviewed','no_show'],
-  no_show:['interview_set'], interviewed:['hired','rejected_after_interview'], hired:['retention_failed','commission_received']
+  offered:['accepted_offer','voice_sent','declined_offer'], accepted_offer:['voice_sent','declined_offer','offered'],
+  voice_sent:['accepted_offer'], voice_accepted:['interview_pending'], interview_pending:['voice_accepted'],
+  interview_set:['interviewed','no_show'], no_show:['interview_pending'],
+  interviewed:['hired','rejected_after_interview'], hired:['retention_failed','commission_received']
 };
+// خطوات القرار: بتظهر للمدير بس (الموافقة على الفويس نوت / الموافقة على الإنترفيو)
+const APPROVAL={ voice_sent:['voice_accepted','voice_rejected'], interview_pending:['interview_set'] };
+const APPROVE_ROLES=['owner'];
+const canApprove=()=>APPROVE_ROLES.includes(profile.role);
 const TERMINAL=['declined_offer','voice_rejected','no_show','rejected_after_interview','retention_failed','commission_received'];
 const NEEDS_REASON=['declined_offer','voice_rejected','no_show','rejected_after_interview','retention_failed'];
 function allowed(st){
-  return (NEXT[st]||[]).filter(s=>{
+  const base=(NEXT[st]||[]).filter(s=>{
     if((s==='hired'||s==='retention_failed') && !['owner','senior'].includes(profile.role)) return false;
     if(s==='commission_received' && profile.role!=='owner') return false;
     return true;
   });
+  const appr=canApprove()?(APPROVAL[st]||[]):[];
+  return appr.concat(base.filter(s=>!appr.includes(s)));
 }
 
 let CANDS=[], FILTER={q:'',status:'',type:'',archived:false};
@@ -357,11 +369,10 @@ async function renderCands(){
   const sel=h('select',{class:'in',onchange:e=>{FILTER.status=e.target.value;paint();}},
     h('option',{value:''},'كل الحالات'), Object.keys(ST).map(k=>h('option',{value:k},ST[k][0])));
   sel.value=FILTER.status;
-  const selT=h('select',{class:'in',onchange:e=>{FILTER.type=e.target.value;paint();}},h('option',{value:''},'Sales / CS'),h('option',{value:'Sales'},'Sales'),h('option',{value:'CS'},'CS')); selT.value=FILTER.type;
-  const arch=h('button',{class:'ch'+(FILTER.archived?' on':''),onclick:()=>{FILTER.archived=!FILTER.archived;renderCands();}},'الأرشيف');
+    const arch=h('button',{class:'ch'+(FILTER.archived?' on':''),onclick:()=>{FILTER.archived=!FILTER.archived;renderCands();}},'الأرشيف');
   const count=h('div',{class:'m'});
   const list=h('div',{class:'list'});
-  page.append(q, h('div',{class:'r2',style:'margin-top:8px'},sel,selT,arch), isOwner()?h('button',{class:'btn b2 sm',style:'margin-top:8px;width:100%;flex:none',onclick:exportCandsCSV},'تصدير المرشحين (CSV)'):null, count, list);
+  page.append(q, h('div',{class:'r2',style:'margin-top:8px'},sel,arch), isOwner()?h('button',{class:'btn b2 sm',style:'margin-top:8px;width:100%;flex:none',onclick:exportCandsCSV},'تصدير المرشحين (CSV)'):null, count, list);
   list.appendChild(h('div',{class:'m'},'جاري التحميل...'));
   CANDS=await loadCands(); paint();
 
@@ -373,7 +384,6 @@ async function renderCands(){
       const isArch=c.archived || (apps.length>0 && apps.every(a=>a.archived));
       if(isArch!==FILTER.archived) return false;
       if(FILTER.status && !apps.some(a=>a.status===FILTER.status)) return false;
-      if(FILTER.type && candType(c)!==FILTER.type) return false;
       if(qq && !(c.full_name.toLowerCase().includes(qq) || (qd && c.phone.includes(qd)))) return false;
       return true;
     });
@@ -393,7 +403,7 @@ function candCard(c){
   return h('div',{class:'card'},
     h('div',{class:'rowb'},h('b',{style:'font-size:16px'},c.full_name),h('button',{class:'lnk',onclick:()=>candForm(c)},'تعديل')),
     h('div',{class:'m'},i1), h('div',{class:'m'},i2),
-    c.voice_url?h('a',{class:'lnk',href:c.voice_url,target:'_blank',rel:'noopener'},'سماع الفويس نوت'):h('a',{class:'lnk',href:'https://vocaroo.com/',target:'_blank',rel:'noopener',style:'color:#64748B'},'تسجيل فويس نوت (Vocaroo)'),
+    safeUrl(c.voice_url)?h('a',{class:'lnk',href:safeUrl(c.voice_url),target:'_blank',rel:'noopener'},'سماع الفويس نوت'):h('a',{class:'lnk',href:'https://vocaroo.com/',target:'_blank',rel:'noopener',style:'color:#64748B'},'تسجيل فويس نوت (Vocaroo)'),
     (NAMES[c.owner_id]&&c.owner_id!==uid)?h('div',{class:'m'},'الريكروتر: '+NAMES[c.owner_id]):null,
     apps.map(a=>appRow(a,c)),
     h('div',{class:'r2'},
@@ -407,7 +417,7 @@ function appRow(a,c){
   const kids=[h('div',{class:'rowb'},h('b',{style:'font-size:14px'},co+(o.title?' - '+o.title:'')),h('span',{class:'t '+st[1]},st[0]))];
   if(a.interview_at) kids.push(h('div',{class:'m'},'الإنترفيو: '+new Date(a.interview_at).toLocaleString('ar-EG',{dateStyle:'medium',timeStyle:'short'})));
   const btns=[h('button',{class:'btn sm',onclick:()=>statusSheet(a,c)},'تغيير الحالة ▾')];
-  if(['voice_accepted','interview_set'].includes(a.status) && o.interview_info)
+  if(['voice_accepted','interview_pending','interview_set'].includes(a.status) && o.interview_info)
     btns.push(h('button',{class:'btn amber sm',onclick:()=>copy(o.interview_info)},'نسخ معلومات الإنترفيو والتقديم'));
   kids.push(h('div',{class:'r2'},btns));
   return h('div',{class:'app'},kids);
@@ -415,19 +425,32 @@ function appRow(a,c){
 
 // ---- تغيير الحالة (قائمة ثم تأكيد) ----
 function statusSheet(a,c){
-  const opts=allowed(a.status);
+  const appr=canApprove(), opts=allowed(a.status), wait=APPROVAL[a.status];
   const list=h('div',{class:'opts'});
+  if(wait){
+    list.appendChild(h('div',{class:'al y'},appr?'الخطوة دي بانتظار قرارك.':'الخطوة دي بانتظار موافقة المدير. تقدر تسحب الطلب لو عايز تعدّل.'));
+    if(appr&&a.status==='voice_sent'&&safeUrl(c.voice_url)) list.appendChild(h('a',{class:'btn amber',href:safeUrl(c.voice_url),target:'_blank',rel:'noopener'},'سماع الفويس نوت'));
+    if(appr&&a.status==='interview_pending'&&a.interview_at) list.appendChild(h('div',{class:'m'},'الموعد المطلوب: '+new Date(a.interview_at).toLocaleString('ar-EG',{dateStyle:'medium',timeStyle:'short'})));
+  }
   if(!opts.length) list.appendChild(h('div',{class:'m'},'مفيش حالات متاحة بعد الحالة دي لصلاحيتك.'));
-  opts.forEach(s=>list.appendChild(h('button',{class:'opt',onclick:()=>changeStatus(a,c,s)},h('span',{class:'dot '+ST[s][1]}),ST[s][0])));
+  opts.forEach(s=>list.appendChild(optBtn(a,c,s)));
+  if(appr){
+    const rest=Object.keys(ST).filter(s=>s!==a.status&&!opts.includes(s));
+    const more=h('div',{class:'opts',style:'display:none'},rest.map(s=>optBtn(a,c,s)));
+    const tg=h('button',{class:'btn b2',onclick:()=>{ const o=more.style.display==='none'; more.style.display=o?'flex':'none'; tg.textContent=o?'إخفاء التعديل اليدوي':'تعديل يدوي: الانتقال لأي حالة ▾'; }},'تعديل يدوي: الانتقال لأي حالة ▾');
+    list.append(tg,more);
+  }
   openSheet('تغيير حالة '+c.full_name,list);
 }
+const optBtn=(a,c,s)=>h('button',{class:'opt',onclick:()=>changeStatus(a,c,s)},h('span',{class:'dot '+ST[s][1]}),ST[s][0]);
 async function changeStatus(a,c,to){
   const extra=h('div',{style:'display:flex;flex-direction:column;gap:6px'});
   let dt,dd,rs;
-  if(to==='interview_set'){ dt=h('input',{type:'datetime-local',class:'in'}); extra.append(h('label',{class:'lb'},'معاد الإنترفيو'),dt); }
+  if(to==='interview_pending'||to==='interview_set'){ dt=h('input',{type:'datetime-local',class:'in',value:a.interview_at?localInput(a.interview_at):''}); extra.append(h('label',{class:'lb'},'معاد الإنترفيو'),dt); }
   if(to==='hired'){ dd=h('input',{type:'date',class:'in',value:today()}); extra.append(h('label',{class:'lb'},'تاريخ بداية الشغل'),dd); }
   if(NEEDS_REASON.includes(to)){ rs=h('textarea',{class:'in',rows:2,placeholder:'السبب (اختياري)'}); extra.append(rs); }
-  const ok=await confirmBox('هل أنت متأكد من التغيير؟','سيتم تغيير حالة '+c.full_name+' من «'+ST[a.status][0]+'» إلى «'+ST[to][0]+'».',extra,'تأكيد التغيير');
+  const note=to==='interview_pending'?' وسيتم إرسال المعاد لموافقة المدير.':(to==='voice_sent'?' وسيتم إرسال الفويس نوت لموافقة المدير.':'');
+  const ok=await confirmBox('هل أنت متأكد من التغيير؟','سيتم تغيير حالة '+c.full_name+' من «'+(ST[a.status]||[a.status])[0]+'» إلى «'+ST[to][0]+'».'+note,extra,'تأكيد التغيير');
   if(!ok) return;
   if(dt && !dt.value){ toast('حدد معاد الإنترفيو وأعد المحاولة'); return; }
   const upd={status:to, archived:TERMINAL.includes(to)};
@@ -516,11 +539,12 @@ function candForm(c){
     const phone=normPhone(f.phone.value);
     if(!f.name.value.trim()){ err.textContent='اكتب اسم المرشح'; err.style.display='block'; return; }
     if(phone.length<8){ err.textContent='رقم الموبايل غير صحيح'; err.style.display='block'; return; }
+    if(f.voice.value.trim() && !safeUrl(f.voice.value)){ err.textContent='رابط الفويس نوت لازم يبدأ بـ https://'; err.style.display='block'; return; }
     const p={ full_name:f.name.value.trim(), phone, age:num(f.age.value), city:f.city.value.trim()||null,
       grad_status:f.grad.value||null, lang1:f.lang1.value.trim()||null, lang1_rank:num(f.r1.value),
       lang2:f.lang2.value.trim()||null, lang2_rank:num(f.r2.value), experience_months:num(f.exp.value)||0,
       experience_type:f.etype.value||null, work_mode:f.mode.value||null, gender:f.gender.value||null,
-      nationality:f.nat.value.trim()||null, military_status:f.mil.value||null, source:f.src.value||null, notes:f.notes.value.trim()||null, voice_url:f.voice.value.trim()||null, job_type:f.jt.value||null };
+      nationality:f.nat.value.trim()||null, military_status:f.mil.value||null, source:f.src.value||null, notes:f.notes.value.trim()||null, voice_url:safeUrl(f.voice.value)||null, job_type:f.jt.value||null };
     save.disabled=true;
     let res;
     if(c.id) res=await sb.from('candidates').update(p).eq('id',c.id).select().single();
@@ -935,7 +959,7 @@ function cycleLabel(d){
   return 'دورة '+lab+' '+new Date(y,m,1).toLocaleDateString('ar-EG',{month:'long'});
 }
 async function loadMoney(){
-  const r=await sb.from('commissions').select('*, earner:profiles!earner_id(full_name), applications(id,status,retention_end,candidates(full_name),offers(title,companies(name)))').order('expected_date');
+  const r=await sb.from('commissions').select('*, earner:profiles!earner_id(full_name), applications(id,status,retention_end,candidates(full_name),offers(id,title,companies(name)))').order('expected_date');
   const priv={};
   if(isOwner()){ const p=await sb.from('commission_private').select('*'); (p.data||[]).forEach(x=>priv[x.application_id]=x); }
   return { rows:r.data||[], priv, error:r.error };
@@ -982,13 +1006,15 @@ async function renderToday(){
   apps.filter(a=>a.status==='interview_set'&&a.interview_at&&new Date(a.interview_at).getTime()<nowT-3600000).forEach(a=>al.push(['r','فات معاد إنترفيو '+((a.candidates&&a.candidates.full_name)||'')+' - غيّر الحالة']));
   const rd=rows.filter(c=>cstate(c)==='ready'&&(isOwner()||c.earner_id===uid)).length;
   if(rd) al.push(['g','عندك '+rd+' عمولة جاهزة للصرف']);
+  if(canApprove()){ const nv=apps.filter(a=>a.status==='voice_sent'&&!a.archived).length, ni=apps.filter(a=>a.status==='interview_pending'&&!a.archived).length;
+    if(nv) al.unshift(['r','عندك '+nv+' فويس نوت بانتظار موافقتك']); if(ni) al.unshift(['r','عندك '+ni+' إنترفيو بانتظار موافقتك']); }
   al.forEach(([k,t])=>body.appendChild(h('div',{class:'al '+k},t)));
   // أعداد الحالات
-  const B=[['offered','عُرض','g'],['voice_sent','فويس نوت','bl'],['voice_accepted','جاهز للإنترفيو','gr'],['interview_set','إنترفيو','or'],['interviewed','بانتظار التعيين','or'],['hired','اتعيّن','gr']];
+  const B=[['offered','عُرض','g'],['voice_sent','فويس نوت','bl'],['voice_accepted','جاهز للإنترفيو','gr'],['interview_pending','موافقة إنترفيو','or'],['interview_set','إنترفيو','or'],['interviewed','بانتظار التعيين','or'],['hired','اتعيّن','gr']];
   body.appendChild(h('div',{class:'tiles'},B.map(([k,l,c])=>h('button',{class:'tile',onclick:()=>{FILTER.status=k;FILTER.archived=false;FILTER.q='';go('cands');}},
     h('span',{class:'t '+c},l),h('b',null,apps.filter(a=>a.status===k).length)))));
   // مقابلات النهارده
-  const td=apps.filter(a=>a.status==='interview_set'&&a.interview_at&&a.interview_at.slice(0,10)===new Date(a.interview_at).toISOString().slice(0,10)&&new Date(a.interview_at).toDateString()===new Date().toDateString());
+  const td=apps.filter(a=>a.status==='interview_set'&&a.interview_at&&new Date(a.interview_at).toDateString()===new Date().toDateString());
   body.appendChild(h('b',{style:'font-size:15px'},'مقابلات النهارده'));
   if(!td.length) body.appendChild(h('div',{class:'empty'},'مفيش مقابلات النهارده.'));
   td.sort((a,b)=>new Date(a.interview_at)-new Date(b.interview_at)).forEach(a=>{ const o=a.offers||{}, c=a.candidates||{};
@@ -1019,6 +1045,7 @@ async function renderMoney(){
       body.appendChild(h('div',{class:'card'},h('b',{style:'font-size:14px'},'مستحقات فريقك'),h('div',{class:'r2',style:'flex-wrap:wrap'},
         h('span',{class:'t or'},'متوقعة '+fmt(others.expected)),h('span',{class:'t gr'},'جاهزة '+fmt(others.ready)),h('span',{class:'t dg'},'مدفوعة '+fmt(others.paid))))); }
   }
+  body.appendChild(h('button',{class:'btn b2',style:'width:100%',onclick:renderCommissions},'العمولات حسب العروض (بحث)'));
   body.appendChild(chipsRow([['expected','متوقعة'],['ready','جاهزة'],['paid','مدفوعة'],['lost','ضايعة']],MF,k=>{MF=k;renderMoney();}));
   const by={}; rows.forEach(c=>{ (by[c.application_id]=by[c.application_id]||[]).push(c); });
   const groups=Object.values(by).filter(rs=>rs.some(c=>cstate(c)===MF));
@@ -1046,6 +1073,59 @@ async function agencyPaid(a){
   if(!await confirmBox('تأكيد الاستلام؟','تأكيد استلام عمولة '+((a.candidates&&a.candidates.full_name)||'')+' من الوكالة. الحالة هتتحول إلى «تم استلام العمولة - مغلق» ويتأرشف.',null,'تأكيد')) return;
   const {error}=await sb.from('applications').update({status:'commission_received',archived:true}).eq('id',a.id);
   if(error){ toast(error.message); return; } toast('تم ✓'); renderMoney();
+}
+
+// ================= صفحة العمولات (مرتبطة بالعروض) =================
+let CQ='', CSTAT='active';
+async function renderCommissions(){
+  const page=$('page'); page.innerHTML='';
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x.dataset.t==='money'));
+  page.appendChild(h('div',{class:'rowb'},h('h2',null,'العمولات'),h('button',{class:'lnk',onclick:renderMoney},'رجوع للفلوس')));
+  page.appendChild(h('div',{class:'m',style:'margin-bottom:8px'},'عمولتك على كل عرض، ومعاها توظيفاتك وإجمالي اللي كسبته منه.'));
+  const q=h('input',{class:'in',style:'margin-bottom:8px',placeholder:'بحث (الشركة، الوظيفة، المكان، المبلغ)',value:CQ});
+  const chips=h('div'), body=h('div',{class:'list',style:'margin-top:0'});
+  page.append(q,chips,body);
+  body.appendChild(h('div',{class:'m'},'جاري التحميل...'));
+  const [r,mn]=await Promise.all([
+    sb.from('offers').select('*, companies(name,status,recruiter_amount,senior_amount,retention_days,wait_months,bonus_amount,bonus_ends,company_private(agency_commission,tl_amount,agencies(name)))').order('created_at',{ascending:false}),
+    loadMoney()]);
+  body.innerHTML='';
+  if(r.error){ body.appendChild(h('div',{class:'err'},'تعذر تحميل العروض')); return; }
+  const priv=mn.priv||{}, by={};
+  (mn.rows||[]).forEach(c=>{
+    const a=c.applications||{}, oid=a.offers&&a.offers.id; if(!oid||c.status==='lost') return;
+    const x=by[oid]||(by[oid]={apps:new Set(),mine:0,paid:0});
+    if(isOwner()){ if(!x.apps.has(c.application_id)){ x.apps.add(c.application_id); const p=priv[c.application_id]; if(p) x.mine+=Number(p.net_amount||0); } }
+    else if(c.earner_id===uid){ x.apps.add(c.application_id); x.mine+=Number(c.amount||0); if(c.status==='paid') x.paid+=Number(c.amount||0); }
+  });
+  const my=o=>Number(profile.role==='senior'?o.companies.senior_amount:o.companies.recruiter_amount)||0;
+  const bonusOf=c=>(c.bonus_amount&&(!c.bonus_ends||c.bonus_ends>=today()))?Number(c.bonus_amount):0;
+  const paintChips=()=>{ chips.innerHTML=''; chips.appendChild(chipsRow([['active','العروض النشطة'],['all','الكل']],CSTAT,k=>{CSTAT=k;paintChips();paint();})); };
+  const paint=()=>{
+    body.innerHTML='';
+    const qq=CQ.trim().toLowerCase();
+    const rows=(r.data||[]).filter(o=>o.companies&&(CSTAT==='all'||(o.status==='active'&&o.companies.status==='active')))
+      .filter(o=>!qq||[o.title,o.companies.name,o.location,o.work_mode,o.job_type,o.salary_text,String(my(o))].filter(Boolean).join(' ').toLowerCase().includes(qq))
+      .sort((x,y)=>my(y)-my(x));
+    body.appendChild(h('div',{class:'m'},rows.length+' عرض'));
+    if(!rows.length){ body.appendChild(h('div',{class:'empty'},'مفيش عروض بالبحث ده.')); return; }
+    rows.forEach(o=>{ const c=o.companies, st=OST[o.status]||[o.status,'g'], b=bonusOf(c), e=by[o.id];
+      const tags=[h('span',{class:'t gr'},(isOwner()?'ريكروتر ':'عمولتك ')+fmt(my(o))+' ج.م')];
+      if(isOwner()){ tags.push(h('span',{class:'t bl'},'سينيور '+fmt(c.senior_amount))); const p=one(c.company_private);
+        if(p) tags.push(h('span',{class:'t g'},'TL '+fmt(p.tl_amount)),h('span',{class:'t tagd'},'الوكالة '+fmt(p.agency_commission))); }
+      tags.push(h('span',{class:'t g'},'Retention '+c.retention_days+' يوم'));
+      if(c.wait_months) tags.push(h('span',{class:'t g'},'انتظار '+c.wait_months+' شهر'));
+      if(b) tags.push(h('span',{class:'t or'},'بونص +'+fmt(b)+(c.bonus_ends?' حتى '+c.bonus_ends:'')));
+      body.appendChild(h('div',{class:'card'},
+        h('div',{class:'rowb'},h('b',null,c.name+' - '+o.title),h('span',{class:'t '+st[1]},st[0])),
+        h('div',{class:'m'},[o.job_type,o.location,o.work_mode,o.salary_text].filter(Boolean).join(' - ')),
+        h('div',{class:'r2',style:'flex-wrap:wrap'},tags,agTag(o)),
+        (e&&e.apps.size)?h('div',{class:'m',style:'font-weight:700'},(isOwner()?'توظيفات: ':'توظيفاتك: ')+e.apps.size+' - '+(isOwner()?'صافي ربحك: ':'إجمالي عمولتك: ')+fmt(e.mine)+' ج.م'+((!isOwner()&&e.paid)?' (مدفوع '+fmt(e.paid)+')':'')):null,
+        h('div',{class:'r2'},h('button',{class:'btn b2 sm',onclick:()=>copy(o.candidate_message||'')},'نسخ العرض'),h('button',{class:'btn sm',onclick:()=>offerDetails(o)},'فتح العرض'))));
+    });
+  };
+  q.oninput=e=>{ CQ=e.target.value; paint(); };
+  paintChips(); paint();
 }
 
 // ---- تقرير الفريق (المدير) ----
@@ -1089,7 +1169,7 @@ async function runReport(from,to){
 // ================= فريقي: نظرة التيم ليدر على فريقه =================
 const NAMES={};
 const BUCKETS=[['offered,accepted_offer','عُرض','g'],['voice_sent','فويس نوت','bl'],['voice_accepted','جاهز للإنترفيو','gr'],
-  ['interview_set','إنترفيو','or'],['interviewed','بانتظار التعيين','or'],['hired,commission_received','اتعيّن','gr'],
+  ['interview_pending','بانتظار موافقة إنترفيو','or'],['interview_set','إنترفيو','or'],['interviewed','بانتظار التعيين','or'],['hired,commission_received','اتعيّن','gr'],
   ['declined_offer,voice_rejected,no_show,rejected_after_interview,retention_failed','مرفوض / ملغي','rd']];
 async function teamSheet(){
   const title=profile.role==='owner'?'الفريق':'فريقي';
@@ -1261,7 +1341,7 @@ const typeOk=(c,o)=>{ const t=candType(c); return !t||!o.job_type||o.job_type===
 
 // ================= تصدير CSV (المدير) =================
 function downloadCSV(name,headers,rows){
-  const esc=v=>{ v=v==null?'':String(v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const esc=v=>{ v=v==null?'':String(v); if(/^[=+\-@]/.test(v)) v="'"+v; return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
   const csv='\ufeff'+[headers].concat(rows).map(r=>r.map(esc).join(',')).join('\r\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),3000);
