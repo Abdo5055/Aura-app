@@ -167,7 +167,7 @@ header .who b{overflow-wrap:anywhere}
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v16</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v17</div>
   </div>
 </section>
 
@@ -202,7 +202,7 @@ const $ = id => document.getElementById(id);
 const ROLE = { owner: 'مدير', senior: 'سينيور', recruiter: 'ريكروتر' };
 const TABS = { today: 'النهارده', cands: 'المرشحين', offers: 'العروض', money: 'الفلوس' };
 let profile = null, idleTimer = null, uid = null;
-let curTab='today', sub=false, guarded=false, lastBack=0, dlgClose=null;
+let curTab='today', sub=false, guarded=false, lastBack=0, dlgClose=null, AFTER=null;
 
 function showErr(msg){ const e=$('err'); e.textContent=msg; e.style.display=msg?'block':'none'; }
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>t.style.display='none',2200); }
@@ -237,7 +237,7 @@ async function start(){
 }
 
 function showLogin(){ $('app').style.display='none'; $('login').style.display='flex'; $('p').value=''; profile=null; guarded=false; clearTimeout(idleTimer);
-  try{ closeSheet(); $('page').innerHTML=''; OC={}; CANDS=[]; FILTER={q:'',status:'',type:'',archived:false}; OSEG='offers'; OFILTER='all'; OTYPE='all'; OQ=''; MF='expected'; CQ=''; CSTAT='active'; GOAL_CELEBRATED=false; Object.keys(NAMES).forEach(k=>delete NAMES[k]); }catch(e){} }
+  try{ closeSheet(); $('page').innerHTML=''; OC={}; CANDS=[]; FILTER={q:'',status:'',type:'',archived:false}; OSEG='offers'; OFILTER='all'; OTYPE='all'; OQ=''; MF='expected'; CQ=''; CSTAT='active'; CSORT='high'; GOAL_CELEBRATED=false; Object.keys(NAMES).forEach(k=>delete NAMES[k]); }catch(e){} }
 
 function showApp(){
   $('login').style.display='none'; $('app').style.display='flex';
@@ -301,7 +301,7 @@ function openSheet(title, content){
   sheet.appendChild(h('div',{class:'box'}, h('div',{class:'grab'}), h('div',{class:'sh-h'}, h('b',null,title), h('button',{class:'x',onclick:closeSheet},'×')), content));
   sheet.style.display='block';
 }
-function closeSheet(){ sheet.style.display='none'; sheet.innerHTML=''; }
+function closeSheet(){ sheet.style.display='none'; sheet.innerHTML=''; AFTER=null; }
 sheet.onclick=e=>{ if(e.target===sheet) closeSheet(); };
 
 function confirmBox(title,text,extra,label){
@@ -722,7 +722,7 @@ async function paintAgencies(body){
       h('div',{class:'r2'},h('button',{class:'btn b2 sm',onclick:()=>agencyForm(a)},'تعديل'),h('button',{class:'btn b2 sm',onclick:()=>visSheet('agency',a.id,a.name)},'الظهور'))));
   });
 }
-function afterSave(seg){ OC={}; OQ=''; closeSheet(); toast('تم الحفظ ✓'); OSEG=seg; OFILTER='all'; go('offers'); }
+function afterSave(seg){ const hook=AFTER; AFTER=null; OC={}; OQ=''; closeSheet(); toast('تم الحفظ ✓'); if(hook){ hook(); return; } OSEG=seg; OFILTER='all'; go('offers'); }
 function errBox(){ return h('div',{class:'err',style:'display:none'}); }
 function showErr2(el,t){ el.textContent=t; el.style.display='block'; }
 const STS=[['active','نشط'],['hold','متوقف (Hold)'],['cancelled','ملغي']];
@@ -1093,54 +1093,60 @@ async function agencyPaid(a){
   if(error){ toast(error.message); return; } toast('تم ✓'); renderMoney();
 }
 
-// ================= صفحة العمولات (مرتبطة بالعروض) =================
-let CQ='', CSTAT='active';
+// ================= صفحة العمولات (كارت لكل شركة) =================
+let CQ='', CSTAT='active', CSORT='high';
 async function renderCommissions(){
   sub=true;
   const page=$('page'); page.innerHTML='';
   document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x.dataset.t==='money'));
   page.appendChild(h('div',{class:'rowb'},h('h2',null,'العمولات'),h('button',{class:'lnk',onclick:renderMoney},'رجوع للفلوس')));
-  page.appendChild(h('div',{class:'m',style:'margin-bottom:8px'},'عمولتك على كل عرض، ومعاها توظيفاتك وإجمالي اللي كسبته منه.'));
-  const q=h('input',{class:'in',style:'margin-bottom:8px',placeholder:'بحث (الشركة، الوظيفة، المكان، المبلغ)',value:CQ});
-  const chips=h('div'), body=h('div',{class:'list',style:'margin-top:0'});
-  page.append(q,chips,body);
+  page.appendChild(h('div',{class:'m',style:'margin-bottom:8px'},isOwner()?'كل شركة بعمولاتها. اضغط تعديل لتغيير أي عمولة.':'عمولاتك على كل شركة.'));
+  const q=h('input',{class:'in',style:'margin-bottom:8px',placeholder:isOwner()?'بحث بالشركة أو الوكالة':'بحث بالشركة',value:CQ});
+  const chipsA=h('div'), chipsB=h('div'), body=h('div',{class:'list',style:'margin-top:0'});
+  page.append(q,chipsA,chipsB,body);
   body.appendChild(h('div',{class:'m'},'جاري التحميل...'));
-  const [r,mn]=await Promise.all([
-    sb.from('offers').select('*, companies(name,status,recruiter_amount,senior_amount,retention_days,wait_months,bonus_amount,bonus_ends,company_private(agency_commission,tl_amount,agencies(name)))').order('created_at',{ascending:false}),
-    loadMoney()]);
+  let data,error;
+  if(isOwner()){ const r=await sb.from('companies').select('*, company_private(agency_commission,tl_amount,agencies(name))'); data=r.data; error=r.error; }
+  else { const r=await sb.rpc('company_commissions');
+    if(!r.error) data=r.data;
+    else { const f=await sb.from('companies').select('id,name,status,retention_days,wait_months,bonus_amount,bonus_ends,recruiter_amount,senior_amount'); data=f.data; error=f.error; } }
   body.innerHTML='';
-  if(r.error){ body.appendChild(h('div',{class:'err'},'تعذر تحميل العروض')); return; }
-  const priv=mn.priv||{}, by={};
-  (mn.rows||[]).forEach(c=>{
-    const a=c.applications||{}, oid=a.offers&&a.offers.id; if(!oid||c.status==='lost') return;
-    const x=by[oid]||(by[oid]={apps:new Set(),mine:0,paid:0});
-    if(isOwner()){ if(!x.apps.has(c.application_id)){ x.apps.add(c.application_id); const p=priv[c.application_id]; if(p) x.mine+=Number(p.net_amount||0); } }
-    else if(c.earner_id===uid){ x.apps.add(c.application_id); x.mine+=Number(c.amount||0); if(c.status==='paid') x.paid+=Number(c.amount||0); }
-  });
-  const my=o=>Number(profile.role==='senior'?o.companies.senior_amount:o.companies.recruiter_amount)||0;
-  const bonusOf=c=>(c.bonus_amount&&(!c.bonus_ends||c.bonus_ends>=today()))?Number(c.bonus_amount):0;
-  const paintChips=()=>{ chips.innerHTML=''; chips.appendChild(chipsRow([['active','العروض النشطة'],['all','الكل']],CSTAT,k=>{CSTAT=k;paintChips();paint();})); };
+  if(error){ body.appendChild(h('div',{class:'err'},'تعذر تحميل العمولات')); return; }
+  const R=profile.role, TL=!!profile.is_tl, n=v=>v==null||v===''?null:Number(v);
+  const rows=(data||[]).map(c=>{ const p=one(c.company_private)||{}, ag=one(p.agencies)||{};
+    return { raw:c, name:c.name, status:c.status, ret:c.retention_days, wait:c.wait_months, bon:c.bonus_amount, bend:c.bonus_ends,
+      rec:(R==='owner'||R==='recruiter')?n(c.recruiter_amount):null,
+      sen:(R==='owner'||R==='senior')?n(c.senior_amount):null,
+      tl:(R==='owner'||(R==='senior'&&TL))?n(c.tl_amount!=null?c.tl_amount:p.tl_amount):null,
+      agc:R==='owner'?n(c.agency_commission!=null?c.agency_commission:p.agency_commission):null,
+      ag:R==='owner'?(c.agency_name||ag.name||''):'' }; });
+  const key=x=>R==='owner'?(x.agc||x.rec||0):(R==='senior'?(x.sen||0):(x.rec||0));
+  const paintChips=()=>{
+    chipsA.innerHTML=''; chipsB.innerHTML='';
+    chipsA.appendChild(chipsRow([['active','الشركات النشطة'],['all','الكل']],CSTAT,k=>{CSTAT=k;paintChips();paint();}));
+    chipsB.appendChild(chipsRow([['high','الأعلى عمولة'],['low','الأقل عمولة'],['name','الاسم']],CSORT,k=>{CSORT=k;paintChips();paint();}));
+  };
   const paint=()=>{
     body.innerHTML='';
     const qq=CQ.trim().toLowerCase();
-    const rows=(r.data||[]).filter(o=>o.companies&&(CSTAT==='all'||(o.status==='active'&&o.companies.status==='active')))
-      .filter(o=>!qq||[o.title,o.companies.name,o.location,o.work_mode,o.job_type,o.salary_text,String(my(o))].filter(Boolean).join(' ').toLowerCase().includes(qq))
-      .sort((x,y)=>my(y)-my(x));
-    body.appendChild(h('div',{class:'m'},rows.length+' عرض'));
-    if(!rows.length){ body.appendChild(h('div',{class:'empty'},'مفيش عروض بالبحث ده.')); return; }
-    rows.forEach(o=>{ const c=o.companies, st=OST[o.status]||[o.status,'g'], b=bonusOf(c), e=by[o.id];
-      const tags=[h('span',{class:'t gr'},(isOwner()?'ريكروتر ':'عمولتك ')+fmt(my(o))+' ج.م')];
-      if(isOwner()){ tags.push(h('span',{class:'t bl'},'سينيور '+fmt(c.senior_amount))); const p=one(c.company_private);
-        if(p) tags.push(h('span',{class:'t g'},'TL '+fmt(p.tl_amount)),h('span',{class:'t tagd'},'الوكالة '+fmt(p.agency_commission))); }
-      tags.push(h('span',{class:'t g'},'Retention '+c.retention_days+' يوم'));
-      if(c.wait_months) tags.push(h('span',{class:'t g'},'انتظار '+c.wait_months+' شهر'));
-      if(b) tags.push(h('span',{class:'t or'},'بونص +'+fmt(b)+(c.bonus_ends?' حتى '+c.bonus_ends:'')));
+    const list=rows.filter(x=>CSTAT==='all'||x.status==='active').filter(x=>!qq||[x.name,x.ag].filter(Boolean).join(' ').toLowerCase().includes(qq));
+    list.sort((a,b)=>CSORT==='name'?String(a.name).localeCompare(String(b.name),'ar'):(CSORT==='low'?key(a)-key(b):key(b)-key(a)));
+    body.appendChild(h('div',{class:'m'},list.length+' شركة'));
+    if(!list.length){ body.appendChild(h('div',{class:'empty'},'مفيش شركات بالبحث ده.')); return; }
+    const t0=today();
+    list.forEach(x=>{ const st=CST[x.status]||[x.status,'g'], tags=[];
+      if(x.agc!=null) tags.push(h('span',{class:'t tagd'},'عمولة الوكالة '+fmt(x.agc)));
+      if(x.rec!=null) tags.push(h('span',{class:'t gr'},'ريكروتر '+fmt(x.rec)+' ج.م'));
+      if(x.sen!=null) tags.push(h('span',{class:'t bl'},'سينيور '+fmt(x.sen)+' ج.م'));
+      if(x.tl!=null) tags.push(h('span',{class:'t or'},'TL '+fmt(x.tl)+' ج.م'));
+      const info=[h('span',{class:'t g'},'Retention '+x.ret+' يوم')];
+      if(x.wait) info.push(h('span',{class:'t g'},'انتظار '+x.wait+' شهر'));
+      if(x.bon&&(!x.bend||x.bend>=t0)) info.push(h('span',{class:'t or'},'بونص +'+fmt(x.bon)+(x.bend?' حتى '+x.bend:'')));
       body.appendChild(h('div',{class:'card'},
-        h('div',{class:'rowb'},h('b',null,c.name+' - '+o.title),h('span',{class:'t '+st[1]},st[0])),
-        h('div',{class:'m'},[o.job_type,o.location,o.work_mode,o.salary_text].filter(Boolean).join(' - ')),
-        h('div',{class:'r2',style:'flex-wrap:wrap'},tags,agTag(o)),
-        (e&&e.apps.size)?h('div',{class:'m',style:'font-weight:700'},(isOwner()?'توظيفات: ':'توظيفاتك: ')+e.apps.size+' - '+(isOwner()?'صافي ربحك: ':'إجمالي عمولتك: ')+fmt(e.mine)+' ج.م'+((!isOwner()&&e.paid)?' (مدفوع '+fmt(e.paid)+')':'')):null,
-        h('div',{class:'r2'},h('button',{class:'btn b2 sm',onclick:()=>copy(o.candidate_message||'')},'نسخ العرض'),h('button',{class:'btn sm',onclick:()=>offerDetails(o)},'فتح العرض'))));
+        h('div',{class:'rowb'},h('b',{style:'font-size:16px'},x.name),h('span',{class:'t '+st[1]},st[0])),
+        x.ag?h('div',null,h('span',{class:'t tagd'},'وكالة '+x.ag)):null,
+        h('div',{class:'r2',style:'flex-wrap:wrap'},tags), h('div',{class:'r2',style:'flex-wrap:wrap'},info),
+        isOwner()?h('button',{class:'btn b2 sm',style:'flex:none;width:100%',onclick:()=>{ AFTER=renderCommissions; companyForm(x.raw); }},'تعديل العمولات'):null));
     });
   };
   q.oninput=e=>{ CQ=e.target.value; paint(); };
