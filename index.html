@@ -41,7 +41,7 @@ button{font:inherit;cursor:pointer}
 .err{background:#FEE2E2;color:#991B1B;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:700}
 /* shell */
 #app{display:none;flex-direction:column;height:100%}
-header{background:var(--dark);color:var(--cream);padding:calc(12px + env(safe-area-inset-top)) 18px 14px;border-radius:0 0 24px 24px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+header{background:var(--dark);color:var(--cream);padding:calc(12px + env(safe-area-inset-top)) 18px 14px;border-radius:0 0 24px 24px}
 header .who b{font-size:18px;font-weight:800;display:block}
 .badge{display:inline-block;font-size:12px;font-weight:700;border-radius:99px;padding:2px 10px;background:var(--gold);color:#3b2a05;margin-top:3px;margin-inline-end:4px}
 header .side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
@@ -151,6 +151,13 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
 .rowb>.t{flex-shrink:0;max-width:50%}
 .m,.card,.kv div,.al{overflow-wrap:anywhere;min-width:0}
 header .who b{overflow-wrap:anywhere}
+/* v20: ترتيب الهيدر */
+header .hrow1{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+header .hrow2{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14)}
+header .hicons{display:flex;align-items:center;gap:8px}
+header .out{min-height:34px}
+.hic{width:34px;height:34px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);background:none;color:var(--cream);display:flex;align-items:center;justify-content:center;font-family:Jost,Arial,sans-serif;font-weight:700;font-size:14px;text-decoration:none;padding:0;direction:ltr}
+.hic.help{background:var(--gold);border-color:var(--gold);color:#3b2a05;font-size:18px}
 </style>
 </head>
 <body>
@@ -167,14 +174,25 @@ header .who b{overflow-wrap:anywhere}
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v19</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v20</div>
   </div>
 </section>
 
 <section id="app">
   <header>
-    <div class="who"><b id="name"></b><span id="badges"></span></div>
-    <div class="side"><div class="mark">AURA</div><button class="out" id="teamBtn" style="display:none"></button><button class="out" id="logout">تسجيل الخروج</button></div>
+    <div class="hrow1">
+      <div class="who"><b id="name"></b><span id="badges"></span></div>
+      <div class="mark">AURA</div>
+    </div>
+    <div class="hrow2">
+      <button class="out" id="teamBtn" style="display:none"></button>
+      <div class="hicons">
+        <button class="hic help" id="helpBtn" aria-label="مساعدة">?</button>
+        <a class="hic" id="fbBtn" target="_blank" rel="noopener" aria-label="فيسبوك" style="display:none">f</a>
+        <a class="hic" id="liBtn" target="_blank" rel="noopener" aria-label="لينكدان" style="display:none">in</a>
+      </div>
+      <button class="out" id="logout">خروج</button>
+    </div>
   </header>
   <main id="page"></main>
   <nav id="nav">
@@ -201,6 +219,11 @@ const sb = supabase.createClient(SB_URL, SB_KEY);
 const $ = id => document.getElementById(id);
 const ROLE = { owner: 'مدير', senior: 'سينيور', recruiter: 'ريكروتر' };
 const TABS = { today: 'الرئيسية', cands: 'المرشحين', offers: 'العروض', money: 'العمولات' };
+// ===== إعدادات الهيدر: ضع رقمك وروابطك هنا =====
+const OWNER_WA = '';   // رقم واتساب المدير بصيغة دولية بدون + (مثال: 201012345678)
+const FB_URL   = '';   // رابط صفحة فيسبوك (https://...)
+const LI_URL   = '';   // رابط لينكدان (https://...)
+
 let profile = null, idleTimer = null, uid = null;
 let curTab='today', sub=null, guarded=false, lastBack=0, dlgClose=null, AFTER=null;
 
@@ -246,18 +269,23 @@ function showApp(){
   const add = t => { const s=document.createElement('span'); s.className='badge'; s.textContent=t; b.appendChild(s); };
   add(profile.is_tl ? 'تيم ليدر' : (ROLE[profile.role] || profile.role));
   const tb=$('teamBtn'); const lead=['senior','owner'].includes(profile.role);
-  tb.style.display='inline-block';
+  tb.style.display=lead?'inline-block':'none';
   if(lead){ tb.textContent=profile.role==='owner'?'الفريق':'فريقي'; tb.onclick=teamSheet; }
-  else { tb.textContent='تواصل مع التيم ليدر'; tb.onclick=contactTL; }
+  const hb=$('helpBtn'); hb.style.display=profile.role==='owner'?'none':'flex'; hb.onclick=helpWA;
+  [['fbBtn',FB_URL],['liBtn',LI_URL]].forEach(([id,u])=>{ const e=$(id), x=safeUrl(u); e.style.display=x?'flex':'none'; if(x) e.href=x; });
   if(!guarded){ history.pushState({aura:1},''); guarded=true; }
   go('today');
 }
 
-async function contactTL(){
-  if(!profile.manager_id){ toast('مفيش تيم ليدر متسجل ليك'); return; }
-  const { data } = await sb.from('profiles').select('full_name,phone').eq('id',profile.manager_id).maybeSingle();
-  const ph=normPhone((data&&data.phone)||'');
-  if(ph.length<8){ toast('مفيش رقم واتساب مسجّل للتيم ليدر'); return; }
+// المساعدة: الريكروتر ← واتساب التيم ليدر (ولو مفيش ← واتساب المدير)، والتيم ليدر ← واتساب المدير
+async function helpWA(){
+  let ph='';
+  if(profile.manager_id && !profile.is_tl){
+    const { data } = await sb.from('profiles').select('phone').eq('id',profile.manager_id).maybeSingle();
+    ph=normPhone((data&&data.phone)||'');
+  }
+  if(ph.length<8) ph=normPhone(OWNER_WA);
+  if(ph.length<8){ toast('رقم المساعدة لسه ما اتضافش'); return; }
   window.open('https://wa.me/'+waNum(ph),'_blank','noopener');
 }
 
