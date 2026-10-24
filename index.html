@@ -167,7 +167,7 @@ header .who b{overflow-wrap:anywhere}
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v18</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v19</div>
   </div>
 </section>
 
@@ -349,16 +349,16 @@ const nr=r=>(r===5?4:r);
 const rankLabel=r=>{ const x=LV.find(v=>String(v[0])===String(r)); return x&&x[0]!==''?x[1]:''; };
 
 const ST={
-  offered:['تم عرض الأوفر','g'], accepted_offer:['وافق على الأوفر','bl'], declined_offer:['لم يوافق على الأوفر','rd'],
-  voice_sent:['تم إرسال الفويس نوت - بانتظار موافقة المدير','bl'], voice_accepted:['تم قبول الفويس نوت - جاهز للإنترفيو','gr'], voice_rejected:['تم رفض الفويس نوت','rd'],
-  interview_pending:['بانتظار موافقة المدير على الإنترفيو','or'], interview_set:['تمت الموافقة - معاد الإنترفيو محدد','or'], no_show:['لم يحضر الإنترفيو','rd'], interviewed:['تم الإنترفيو - بانتظار التعيين','or'],
-  rejected_after_interview:['مرفوض بعد الإنترفيو','rd'], hired:['تم التعيين - بانتظار العمولة','gr'], retention_failed:['فشل الاحتفاظ','rd'],
-  commission_received:['تم استلام العمولة - مغلق','dg']
+  offered:['عُرض عليه الأوفر','g'], accepted_offer:['وافق على الأوفر','bl'], declined_offer:['رفض الأوفر','rd'],
+  voice_sent:['فويس نوت - بانتظار المدير','bl'], voice_accepted:['الفويس مقبول - حدد معاد الإنترفيو','gr'], voice_rejected:['الفويس مرفوض','rd'],
+  interview_pending:['الإنترفيو - بانتظار المدير','or'], interview_set:['الإنترفيو مؤكد','or'], no_show:['لم يحضر','rd'], interviewed:['تم الإنترفيو - بانتظار النتيجة','or'],
+  rejected_after_interview:['مرفوض بعد الإنترفيو','rd'], hired:['تم التعيين','gr'], retention_failed:['ترك الشغل - العمولة ضاعت','rd'],
+  commission_received:['تم استلام العمولة','dg']
 };
 // خطوات الريكروتر (للأمام + سحب الطلب)
 const NEXT={
-  offered:['accepted_offer','voice_sent','declined_offer'], accepted_offer:['voice_sent','declined_offer','offered'],
-  voice_sent:['accepted_offer'], voice_accepted:['interview_pending'], interview_pending:['voice_accepted'],
+  offered:['voice_sent','declined_offer'], accepted_offer:['voice_sent','declined_offer','offered'],
+  voice_sent:['offered'], voice_accepted:['interview_pending'], interview_pending:['voice_accepted'],
   interview_set:['interviewed','no_show'], no_show:['interview_pending'],
   interviewed:['hired','rejected_after_interview'], hired:['retention_failed','commission_received']
 };
@@ -366,7 +366,7 @@ const NEXT={
 const APPROVAL={ voice_sent:['voice_accepted','voice_rejected'], interview_pending:['interview_set'] };
 const APPROVE_ROLES=['owner'];
 const canApprove=()=>APPROVE_ROLES.includes(profile.role);
-const TERMINAL=['declined_offer','voice_rejected','no_show','rejected_after_interview','retention_failed','commission_received'];
+const TERMINAL=['declined_offer','voice_rejected','rejected_after_interview','retention_failed','commission_received'];
 const NEEDS_REASON=['declined_offer','voice_rejected','no_show','rejected_after_interview','retention_failed'];
 function allowed(st){
   const base=(NEXT[st]||[]).filter(s=>{
@@ -394,7 +394,7 @@ async function renderCands(){
   page.appendChild(h('h2',null,'المرشحين'));
   const q=h('input',{class:'in',placeholder:'بحث بالاسم أو الرقم',value:FILTER.q,oninput:e=>{FILTER.q=e.target.value;paint();}});
   const sel=h('select',{class:'in',onchange:e=>{FILTER.status=e.target.value;paint();}},
-    h('option',{value:''},'كل الحالات'), Object.keys(ST).map(k=>h('option',{value:k},ST[k][0])));
+    h('option',{value:''},'كل الحالات'), Object.keys(ST).filter(k=>k!=='accepted_offer').map(k=>h('option',{value:k},ST[k][0])));
   sel.value=FILTER.status;
     const arch=h('button',{class:'ch'+(FILTER.archived?' on':''),onclick:()=>{FILTER.archived=!FILTER.archived;renderCands();}},'الأرشيف');
   const count=h('div',{class:'m'});
@@ -491,7 +491,7 @@ function statusSheet(a,c){
   if(!opts.length) list.appendChild(h('div',{class:'m'},'مفيش حالات متاحة بعد الحالة دي لصلاحيتك.'));
   opts.forEach(s=>list.appendChild(optBtn(a,c,s)));
   if(appr){
-    const rest=Object.keys(ST).filter(s=>s!==a.status&&!opts.includes(s));
+    const rest=Object.keys(ST).filter(s=>s!==a.status&&!opts.includes(s)&&s!=='accepted_offer');
     const more=h('div',{class:'opts',style:'display:none'},rest.map(s=>optBtn(a,c,s)));
     const tg=h('button',{class:'btn b2',onclick:()=>{ const o=more.style.display==='none'; more.style.display=o?'flex':'none'; tg.textContent=o?'إخفاء التعديل اليدوي':'تعديل يدوي: الانتقال لأي حالة ▾'; }},'تعديل يدوي: الانتقال لأي حالة ▾');
     list.append(tg,more);
