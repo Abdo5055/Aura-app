@@ -187,7 +187,7 @@ header .msub{font-family:Jost,sans-serif;font-weight:400;font-size:9px;letter-sp
     <div><label for="u">اسم المستخدم</label><div class="field"><input id="u" autocomplete="username" autocapitalize="none" spellcheck="false"></div></div>
     <div><label for="p">كلمة المرور</label><div class="field"><input id="p" type="password" autocomplete="current-password"><button type="button" class="eye" id="eye">إظهار</button></div></div>
     <button class="btn amber" id="go" style="height:52px;font-size:16px">دخول</button>
-    <div style="text-align:center;font-size:11px;color:#6fa8a2">v27</div>
+    <div style="text-align:center;font-size:11px;color:#6fa8a2">v28</div>
   </div>
   <div class="copy">جميع الحقوق محفوظة © 2026 AURA</div>
 </section>
@@ -775,8 +775,8 @@ async function paintOffers(body){
   if(!rows.length){ body.appendChild(h('div',{class:'empty'},'مفيش عروض هنا.')); return; }
   rows.forEach(o=>{ const st=OST[o.status]||[o.status,'g'];
     body.appendChild(h('div',{class:'card'},
-      h('div',{class:'rowb'},h('b',null,(o.companies?o.companies.name:'')+' - '+o.title),h('span',{class:'t '+st[1]},st[0])),
-      (agName(o)||(isOwner()&&o.pin_rank))?h('div',null,agTag(o),(isOwner()&&o.pin_rank)?h('span',{class:'t or',style:'margin-inline-start:6px'},'مثبّت '+o.pin_rank):null):null,
+      h('div',{class:'rowb'},h('b',null,(({1:'🥇',2:'🥈',3:'🥉'})[o.pin_rank]?({1:'🥇',2:'🥈',3:'🥉'})[o.pin_rank]+' ':'')+(o.companies?o.companies.name:'')+' - '+o.title),h('span',{class:'t '+st[1]},st[0])),
+      (agName(o)||(isOwner()&&o.pin_rank>3))?h('div',null,agTag(o),(isOwner()&&o.pin_rank>3)?h('span',{class:'t or',style:'margin-inline-start:6px'},'مثبّت '+o.pin_rank):null):null,
       h('div',{class:'m'},[o.location,o.work_mode,o.salary_text].filter(Boolean).join(' - ')),
       h('div',{class:'r2'},
         h('button',{class:'btn b2 sm',onclick:()=>copy(o.candidate_message||'')},'نسخ العرض'),
@@ -1354,11 +1354,13 @@ function goalCard(g,c,label,onTap){
 }
 function renderGoals(body,apps,profs,goals){
   const mk=today().slice(0,7), nm=id=>(profs.find(p=>p.id===id)||{}).full_name||'';
-  body.appendChild(h('div',{class:'rowb'},h('b',{style:'font-size:15px'},'هدف '+monthLabel(mk)),isOwner()?h('button',{class:'lnk',onclick:()=>goalsManager()},'تحديد الأهداف'):null));
   const list=isOwner()?goals.slice().sort((a,b)=>nm(a.user_id).localeCompare(nm(b.user_id),'ar')||(a.scope==='team'?1:-1)):goals.filter(g=>g.user_id===uid).sort((a,b)=>a.scope==='personal'?-1:1);
-  if(!list.length){ body.appendChild(h('div',{class:'empty'},isOwner()?'مفيش أهداف للشهر ده لسه. اضغط "تحديد الأهداف".':'لسه ما اتحددلكش هدف للشهر ده.')); return; }
+  const shown=list.filter(g=>Number(g.target_hires)>0);
+  if(!isOwner()&&!shown.length) return;   // مفيش هدف محدد = القسم كله مخفي
+  body.appendChild(h('div',{class:'rowb'},h('b',{style:'font-size:15px'},'هدف '+monthLabel(mk)),isOwner()?h('button',{class:'lnk',onclick:()=>goalsManager()},'تحديد الأهداف'):null));
+  if(!shown.length){ body.appendChild(h('div',{class:'empty'},'مفيش أهداف للشهر ده لسه. اضغط "تحديد الأهداف".')); return; }
   let dueTotal=0;
-  list.forEach(g=>{ const c=goalCalc(g,apps,profs,mk);
+  shown.forEach(g=>{ const c=goalCalc(g,apps,profs,mk);
     if(isOwner()&&c.ach&&!g.bonus_paid) dueTotal+=Number(g.bonus_amount||0);
     const label=isOwner()?(nm(g.user_id)+(g.scope==='team'?' - هدف الفريق':'')):(g.scope==='team'?'هدف فريقي':'هدفي الشخصي');
     body.appendChild(goalCard(g,c,label,()=>goalDetails(g,c,profs,apps,mk,goals,label)));
